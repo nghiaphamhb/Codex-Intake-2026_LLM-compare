@@ -1,0 +1,34 @@
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+html { min-width: 320px; background: var(--color-bg-primary); }
+body {
+  margin: 0;
+  color: var(--color-text-primary);
+  background: var(--color-bg-primary);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+  -webkit-font-smoothing: antialiased;
+}
+button, input, textarea, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+button:disabled { cursor: not-allowed; }
+:focus-visible { outline: var(--focus-ring); outline-offset: 4px; }
+a { color: inherit; text-underline-offset: 3px; }
+img, svg { display: block; }
+code, pre { font-family: var(--font-mono); }
+pre { overflow-x: auto; }
+h1, h2, p { margin: 0; }
+::selection { background: var(--color-text-primary); color: var(--color-bg-primary); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+

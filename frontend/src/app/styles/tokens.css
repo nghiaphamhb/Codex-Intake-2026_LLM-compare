@@ -1,0 +1,48 @@
+/* Source: Figma LLM Compare, file tUMuB5lsAJ9gBPuQ6bJIQB.
+   Colors and radius follow variable definitions. Other values follow frames;
+   spacing scale, focus and layout bounds are implementation conventions. */
+:root {
+  color-scheme: dark;
+  --color-bg-primary: #000000;
+  --color-bg-secondary: #1b1b1b;
+  --color-bg-third: #0e0e0e;
+  --color-bg-control-accent: #ffffff;
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #777777;
+  --color-text-control-accent: #000000;
+  --color-text-code: #e6e6e6;
+  --color-stroke: #191919;
+  --color-stroke-subtle: rgb(255 255 255 / 8%);
+  --color-stroke-glass: rgb(255 255 255 / 9%);
+  --color-stroke-dashed: rgb(255 255 255 / 18%);
+  --color-bg-glass: rgb(24 24 26 / 62%);
+  --color-bg-control: rgb(255 255 255 / 8%);
+  --font-sans: 'Inter Variable', sans-serif;
+  --font-mono: 'JetBrains Mono Variable', monospace;
+  --font-size-caption: 12px;
+  --font-size-body: 14px;
+  --font-size-title: 16px;
+  --line-height-caption: 18px;
+  --line-height-body: 22px;
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 28px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --border-radius: 16px;
+  --radius-panel: 18px;
+  --radius-pill: 999px;
+  --blur-glass: 12px;
+  --shadow-glass: 0 10px 30px rgb(0 0 0 / 55%);
+  --layout-max-width: 1216px;
+  --layout-gutter: 16px;
+  --focus-ring: 2px solid var(--color-text-primary);
+}
+

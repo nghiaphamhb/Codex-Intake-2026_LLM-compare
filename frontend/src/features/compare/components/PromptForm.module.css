@@ -1,0 +1,55 @@
+.form {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: 8px 8px 8px 16px;
+  background: var(--color-bg-third);
+  border: 1px solid var(--color-stroke);
+  border-radius: var(--border-radius);
+}
+.form:focus-within {
+  outline: var(--focus-ring);
+  outline-offset: 3px;
+}
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.textarea {
+  flex: 1;
+  min-width: 0;
+  min-height: 36px;
+  max-height: 160px;
+  padding: 7px 0;
+  background: transparent;
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+  border: none;
+  outline: none;
+  resize: none;
+  overflow-y: hidden;
+}
+.textarea::placeholder { color: var(--color-text-secondary); }
+.actionButton { flex-shrink: 0; }
+.actionButton .sendButton {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  background: var(--color-bg-control-accent);
+  color: var(--color-text-control-accent);
+}
+.actionButton .sendButton:hover:not(:disabled) {
+  background: var(--color-bg-control-accent);
+  opacity: 0.85;
+}

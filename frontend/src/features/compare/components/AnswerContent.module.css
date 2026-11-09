@@ -1,0 +1,107 @@
+.content {
+  font-family: var(--font-sans);
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+  color: var(--color-text-primary);
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+.content h1,
+.content h2,
+.content h3,
+.content h4,
+.content h5,
+.content h6 {
+  margin-top: var(--space-6);
+  margin-bottom: var(--space-3);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.content h1 { font-size: 20px; line-height: 26px; }
+.content h2 { font-size: 18px; line-height: 24px; }
+.content h3 { font-size: 16px; line-height: 22px; }
+
+.content p {
+  margin-bottom: var(--space-4);
+}
+
+.content p:last-child {
+  margin-bottom: 0;
+}
+
+.content ul,
+.content ol {
+  margin-top: 0;
+  margin-bottom: var(--space-4);
+  padding-left: var(--space-6);
+}
+
+.content li {
+  margin-bottom: var(--space-2);
+}
+
+.content blockquote {
+  margin: var(--space-4) 0;
+  padding-left: var(--space-4);
+  border-left: 3px solid var(--color-stroke-dashed);
+  color: var(--color-text-secondary);
+}
+
+.inlineCode {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-caption);
+  padding: 2px 6px;
+  background: var(--color-bg-third);
+  border: 1px solid var(--color-stroke);
+  border-radius: 4px;
+  color: var(--color-text-code);
+  white-space: break-spaces;
+}
+
+.tableWrapper {
+  width: 100%;
+  overflow-x: auto;
+  margin-block: var(--space-4);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-body);
+  text-align: left;
+}
+
+.table th,
+.table td {
+  min-width: 120px;
+  padding: 10px 8px;
+  overflow-wrap: normal;
+  word-break: normal;
+  border-bottom: 1px solid var(--color-stroke);
+}
+
+.table th {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.table tr:last-child td {
+  border-bottom: none;
+}
+
+.table tbody tr:hover {
+  background: var(--color-bg-control);
+}
+
+.imageAlt {
+  display: inline-block;
+  padding: 2px 6px;
+  background: var(--color-bg-third);
+  border: 1px dashed var(--color-stroke-dashed);
+  border-radius: 4px;
+  font-size: var(--font-size-caption);
+  color: var(--color-text-secondary);
+}
+
