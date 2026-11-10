@@ -1,0 +1,36 @@
+.cell {
+  padding: 24px 28px 40px;
+  min-width: 0;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.desktopContent > :last-child {
+  margin-bottom: 0;
+}
+
+.desktopContent th:first-child,
+.desktopContent td:first-child {
+  padding-left: 0;
+  font-weight: var(--font-weight-semibold);
+}
+
+.desktopContent th:last-child,
+.desktopContent td:last-child {
+  padding-right: 0;
+}
+
+.desktopContent tr:last-child td {
+  border-bottom: 1px solid var(--color-stroke);
+}
+
+.metadata {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-caption);
+  line-height: var(--line-height-caption);
+  color: var(--color-text-secondary);
+  user-select: none;
+}
+

@@ -5,9 +5,10 @@ export type ThoughtStatusProps = {
   state: 'thinking' | 'done';
   text?: string;
   durationSeconds?: number;
+  variant?: 'badge' | 'inline';
 };
 
-export function ThoughtStatus({ state, text, durationSeconds }: ThoughtStatusProps) {
+export function ThoughtStatus({ state, text, durationSeconds, variant = 'badge' }: ThoughtStatusProps) {
   const [isOpen, setIsOpen] = useState(false);
   const contentId = useId();
 
@@ -15,13 +16,15 @@ export function ThoughtStatus({ state, text, durationSeconds }: ThoughtStatusPro
     state === 'thinking'
       ? 'Думает…'
       : durationSeconds != null
-      ? `Думала ${durationSeconds} с`
+      ? `Думала ${variant === 'inline'
+          ? new Intl.NumberFormat('ru', { style: 'unit', unit: 'second', unitDisplay: 'long' }).format(durationSeconds)
+          : `${durationSeconds} с`}`
       : 'Готово';
 
   const hasContent = Boolean(text && text.trim().length > 0);
 
   return (
-    <div className={styles.container}>
+    <div className={`${styles.container} ${variant === 'inline' ? styles.inline : ''}`}>
       {hasContent ? (
         <button
           type="button"

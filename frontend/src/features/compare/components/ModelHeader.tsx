@@ -5,11 +5,17 @@ export type ModelHeaderProps = {
   name: string;
   provider: string;
   onRemove?: () => void;
+  className?: string;
 };
 
-export function ModelHeader({ name, provider, onRemove }: ModelHeaderProps) {
+export function ModelHeader({
+  name,
+  provider,
+  onRemove,
+  className,
+}: ModelHeaderProps) {
   return (
-    <div className={styles.header}>
+    <div className={`${styles.header} ${className || ''}`}>
       <div className={styles.info}>
         <span className={styles.name} title={name}>
           {name}
@@ -24,10 +30,10 @@ export function ModelHeader({ name, provider, onRemove }: ModelHeaderProps) {
             label={`Удалить модель ${name}`}
             iconSrc="/assets/icons/close.svg"
             onClick={onRemove}
+            className={styles.closeIconButton}
           />
         </div>
       )}
     </div>
   );
 }
-

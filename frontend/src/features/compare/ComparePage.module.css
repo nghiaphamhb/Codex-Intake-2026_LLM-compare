@@ -1,0 +1,57 @@
+.page {
+  min-height: 100vh;
+  min-width: 1280px;
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+
+.container {
+  width: min(calc(100% - 64px), var(--layout-max-width));
+  margin-inline: auto;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  box-sizing: border-box;
+}
+
+.bodyGrid {
+  padding-top: 24px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 168px;
+  gap: 32px;
+  align-items: stretch;
+}
+
+.composerWrapper {
+  padding-top: 40px;
+  padding-bottom: 24px;
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.composerInner {
+  width: 760px;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.demoStatus {
+  margin-top: 12px;
+  font-family: var(--font-sans);
+  font-size: var(--font-size-caption);
+  line-height: var(--line-height-caption);
+  color: var(--color-text-secondary);
+  text-align: center;
+  min-height: 0;
+}
+
+.demoStatus:empty {
+  display: none;
+}

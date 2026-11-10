@@ -5,6 +5,7 @@ import styles from './CodeBlock.module.css';
 export type CodeBlockProps = {
   code: string;
   language?: string;
+  className?: string;
 };
 
 type CopyStatus = 'idle' | 'copying' | 'success' | 'error';
@@ -64,7 +65,7 @@ export function CodeBlock(props: CodeBlockProps) {
   return <CodeBlockContent key={props.code} {...props} />;
 }
 
-function CodeBlockContent({ code, language }: CodeBlockProps) {
+function CodeBlockContent({ code, language, className }: CodeBlockProps) {
   const [status, setStatus] = useState<CopyStatus>('idle');
   const normalizedLang = normalizeLanguage(language);
   const highlightLang = getHighlightLanguage(normalizedLang);
@@ -92,7 +93,7 @@ function CodeBlockContent({ code, language }: CodeBlockProps) {
       : 'Копировать';
 
   return (
-    <div className={styles.container}>
+    <div className={`${styles.container} ${className || ''}`}>
       <div className={styles.header}>
         <span className={styles.language}>{normalizedLang}</span>
         <div className={styles.copyArea} aria-live="polite">

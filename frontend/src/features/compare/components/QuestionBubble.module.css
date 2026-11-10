@@ -1,7 +1,7 @@
 .bubble {
-  padding: var(--space-4) var(--space-5);
+  padding: 12px 16px;
   background: var(--color-bg-secondary);
-  border: 1px solid var(--color-stroke-subtle);
+  border: none;
   border-radius: var(--border-radius);
   color: var(--color-text-primary);
   font-family: var(--font-sans);
@@ -10,5 +10,5 @@
   white-space: pre-wrap;
   overflow-wrap: break-word;
   word-break: break-word;
+  box-sizing: border-box;
 }
-

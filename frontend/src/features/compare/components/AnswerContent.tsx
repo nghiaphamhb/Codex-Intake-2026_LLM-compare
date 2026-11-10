@@ -6,11 +6,12 @@ import styles from './AnswerContent.module.css';
 
 export type AnswerContentProps = {
   markdown: string;
+  className?: string;
 };
 
-export function AnswerContent({ markdown }: AnswerContentProps) {
+export function AnswerContent({ markdown, className }: AnswerContentProps) {
   return (
-    <div className={styles.content}>
+    <div className={`${styles.content} ${className || ''}`}>
       <ReactMarkdown
         skipHtml={true}
         remarkPlugins={[remarkGfm]}
@@ -26,7 +27,13 @@ export function AnswerContent({ markdown }: AnswerContentProps) {
                   : Array.isArray(codeProps.children)
                   ? codeProps.children.join('')
                   : String(codeProps.children ?? '');
-              return <CodeBlock code={rawCode} language={language} />;
+              return (
+                <CodeBlock
+                  code={rawCode}
+                  language={language}
+                  className={styles.codeBlock}
+                />
+              );
             }
             return <pre>{children}</pre>;
           },
