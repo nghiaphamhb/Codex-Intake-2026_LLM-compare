@@ -1,0 +1,71 @@
+.gridContainer {
+  width: 1016px;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.modelBar {
+  position: sticky;
+  top: 16px;
+  z-index: 10;
+  height: 64px;
+  box-sizing: border-box;
+  border-radius: var(--radius-panel);
+  background: var(--color-bg-glass);
+  backdrop-filter: blur(var(--blur-glass));
+  -webkit-backdrop-filter: blur(var(--blur-glass));
+  border: 1px solid var(--color-stroke-glass);
+  box-shadow: var(--shadow-glass);
+  display: grid;
+  grid-template-columns: repeat(var(--model-columns, 3), minmax(0, 1fr));
+  overflow: visible;
+}
+
+.modelHeaderCell {
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+}
+
+.modelHeaderCell > * {
+  width: 100%;
+}
+
+.modelHeaderCellWithBorder {
+  border-left: 1px solid var(--color-stroke-subtle);
+}
+
+.firstTurnQuestion {
+  padding: 24px 28px 0;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.turn {
+  border-top: 1px solid var(--color-stroke);
+}
+
+.turnQuestion {
+  padding: 33px 28px 0;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.questionBubbleWrapper {
+  width: 454px;
+  max-width: 100%;
+}
+
+.answersRow {
+  display: grid;
+  grid-template-columns: repeat(var(--model-columns, 3), minmax(0, 1fr));
+  align-items: stretch;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.cellWithBorder {
+  border-left: 1px solid var(--color-stroke);
+}
+

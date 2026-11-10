@@ -1,20 +1,17 @@
 .container {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
-  padding: var(--space-4);
+  gap: 12px;
+  padding: 20px;
   background: var(--color-bg-third);
-  border: 1px solid var(--color-stroke);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: var(--border-radius);
-}
-
-.header {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
+  box-sizing: border-box;
 }
 
 .icon {
+  width: 20px;
+  height: 20px;
   display: block;
   flex-shrink: 0;
 }
@@ -33,11 +30,32 @@
   line-height: var(--line-height-caption);
   color: var(--color-text-secondary);
   white-space: pre-wrap;
+  margin: 0;
 }
 
 .actions {
   display: flex;
   align-items: center;
-  margin-top: var(--space-1);
+  margin-top: 0;
 }
 
+.retryIcon {
+  width: 16px;
+  height: 16px;
+  display: inline-block;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+.desktop {
+  background: transparent;
+}
+
+.desktop .message {
+  font-weight: var(--font-weight-semibold);
+}
+
+.desktop .description {
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+}

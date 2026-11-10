@@ -72,3 +72,18 @@
   word-break: break-word;
 }
 
+.inline {
+  margin-block: 0;
+}
+
+.inline .toggleButton,
+.inline .staticBadge {
+  gap: 6px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+}
+

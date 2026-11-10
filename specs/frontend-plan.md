@@ -2,12 +2,12 @@
 |---|---|---|
 | **1. Khảo sát và chốt phạm vi** | Đọc cấu trúc repo, xác định framework và phần có thể tái sử dụng; đối chiếu các frame; liệt kê những hành vi Figma chưa mô tả | Danh sách màn hình, tương tác và tiêu chí nghiệm thu rõ ràng |
 | **2. Chuẩn bị nền giao diện** | Trích xuất màu, font Inter/JetBrains Mono, khoảng cách, bo góc, đường viền và hiệu ứng nền mờ; lấy logo, icon từ Figma | Bộ quy ước giao diện và asset dùng chung |
-| **3. Xây component cơ bản** | Button, input, model header, question bubble, nội dung câu trả lời, bảng, code block có Copy, trạng thái suy nghĩ, thông báo lỗi | Các thành phần tái sử dụng và đủ trạng thái cần thiết |
-| **4. Ghép màn hình desktop** | Header; các cột model; câu hỏi chung và hàng câu trả lời tương ứng; vùng thêm model; ô nhập câu hỏi phía dưới | Màn hình kết quả khớp bố cục Figma ở kích thước mẫu 1440px |
+| **3. Xây component cơ bản** | Button, input, model header, question bubble, nội dung câu trả lời, bảng, code block có Copy, trạng thái suy nghĩ, thông báo lỗi | Các thành phần tái sử dụng và đủ trạng thái cần thiết | [FE003-ui-components.md](./FE003-ui-components.md) (Hoàn tất) |
+| **4. Ghép màn hình desktop** | Header; các cột model; câu hỏi chung và hàng câu trả lời tương ứng; vùng thêm model; ô nhập câu hỏi phía dưới | Màn hình kết quả khớp bố cục Figma ở kích thước mẫu 1440px | [FE004-desktop-comparison.md](./FE004-desktop-comparison.md) (Hoàn tất) |
 | **5. Hoàn thiện tương tác** | Gửi câu hỏi; tìm/thêm/xóa model; mở/đóng phần suy nghĩ; copy code; tạo so sánh mới; thử lại model lỗi | Luồng sử dụng hoàn chỉnh bằng dữ liệu giả lập |
 | **6. Mô phỏng sinh câu trả lời** | Cho từng model chuyển trạng thái độc lập: chờ → suy nghĩ/sinh nội dung → hoàn tất hoặc lỗi; hiển thị thời gian và chi phí mẫu | Kiểm chứng UI khi các model trả lời khác tốc độ |
-| **7. Làm responsive và mobile** | Desktop hiển thị nhiều cột; mobile hiển thị model đang chọn bằng thanh tab cuộn ngang; xử lý bảng/code dài, header sticky và ô nhập | Khớp mẫu mobile 390px, sử dụng được ở kích thước trung gian |
-| **8. Kiểm tra và bàn giao** | Đối chiếu ảnh giao diện với từng frame; kiểm tra bàn phím, focus, cuộn trang, nội dung dài và các luồng chính; chạy build/check của repo | Bản frontend chạy được, kèm hướng dẫn chạy và danh sách phần cần tích hợp API |
+| **7. Làm responsive và mobile** | Desktop hiển thị nhiều cột; mobile hiển thị model đang chọn bằng thanh tab cuộn ngang; xử lý bảng/code dài, header sticky và ô nhập | Khớp mẫu mobile 390px, sử dụng được ở kích thước trung gian | (sau)
+| **8. Kiểm tra và bàn giao** | Đối chiếu ảnh giao diện với từng frame; kiểm tra bàn phím, focus, cuộn trang, nội dung dài và các luồng chính; chạy build/check của repo | Bản frontend chạy được, kèm hướng dẫn chạy và danh sách phần cần tích hợp API | (sau)
 
 ## Bước 3 — Xây component cơ bản
 
@@ -86,3 +86,7 @@ các lớp trừu tượng chưa cần. Không thay đổi backend.
 
 Người dùng duyệt kế hoạch bước 3 trước. Sau khi được cho phép triển khai,
 thực hiện 3.1–3.7, báo kết quả xác minh và bàn giao bộ component cho bước 4.
+
+## Bước 4 — Ghép màn hình desktop
+
+**Trạng thái:** Đã hoàn thành theo đặc tả [FE004-desktop-comparison.md](./FE004-desktop-comparison.md). Toàn bộ 90/90 tests pass, typecheck/build exit 0, ảnh chụp 1440×1490px khớp frame Figma 2609:2229 và đã đối chiếu bằng trình duyệt thật (Playwright / Edge). Bàn giao cho Bước 5 để hoàn thiện tương tác và quản lý dữ liệu so sánh.
