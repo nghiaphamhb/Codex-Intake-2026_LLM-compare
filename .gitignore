@@ -5,3 +5,6 @@ backend/dist/
 !.env.example
 frontend/dist/
 *.tsbuildinfo
+.husky/_/
+coverage/
+frontend/artifacts/

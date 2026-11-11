@@ -45,7 +45,10 @@ function getSanitizedEnv(overrides: Record<string, string | undefined> = {}) {
   return env;
 }
 
-async function waitForHealth(port: number, timeoutMs = 7000): Promise<{ status: number; body: any }> {
+async function waitForHealth(
+  port: number,
+  timeoutMs = 7000,
+): Promise<{ status: number; body: unknown }> {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     try {
@@ -67,20 +70,20 @@ test('startup exits with code 1 when required config is missing without leaking 
   let stdout = '';
 
   try {
-    const child = spawn(
-      process.execPath,
-      ['--import', tsxLoaderUrl, absoluteServerPath],
-      {
-        cwd: tempDir,
-        env: getSanitizedEnv({
-          LLM_BASE_URL: 'https://example.invalid'
-          // LLM_API_KEY is intentionally missing
-        })
-      }
-    );
+    const child = spawn(process.execPath, ['--import', tsxLoaderUrl, absoluteServerPath], {
+      cwd: tempDir,
+      env: getSanitizedEnv({
+        LLM_BASE_URL: 'https://example.invalid',
+        // LLM_API_KEY is intentionally missing
+      }),
+    });
 
-    child.stdout?.on('data', (d) => { stdout += d.toString(); });
-    child.stderr?.on('data', (d) => { stderr += d.toString(); });
+    child.stdout?.on('data', (d) => {
+      stdout += d.toString();
+    });
+    child.stderr?.on('data', (d) => {
+      stderr += d.toString();
+    });
 
     const exitCode = await new Promise<number | null>((resolve) => {
       child.on('exit', resolve);
@@ -105,7 +108,7 @@ test('startup loads .env file and process.env overrides file values, serving hea
   // Write .env to tempDir with different values
   writeFileSync(
     join(tempDir, '.env'),
-    `PORT=${filePort}\nLLM_BASE_URL=https://file.example.invalid\nLLM_API_KEY=${fileKey}\nLLM_TIMEOUT_MS=10000\n`
+    `PORT=${filePort}\nLLM_BASE_URL=https://file.example.invalid\nLLM_API_KEY=${fileKey}\nLLM_TIMEOUT_MS=10000\n`,
   );
 
   let stdout = '';
@@ -113,20 +116,20 @@ test('startup loads .env file and process.env overrides file values, serving hea
   let child: ReturnType<typeof spawn> | undefined;
 
   try {
-    child = spawn(
-      process.execPath,
-      ['--import', tsxLoaderUrl, absoluteServerPath],
-      {
-        cwd: tempDir,
-        env: getSanitizedEnv({
-          PORT: String(targetPort), // process env must override filePort
-          LLM_API_KEY: envKey       // process env must override fileKey
-        })
-      }
-    );
+    child = spawn(process.execPath, ['--import', tsxLoaderUrl, absoluteServerPath], {
+      cwd: tempDir,
+      env: getSanitizedEnv({
+        PORT: String(targetPort), // process env must override filePort
+        LLM_API_KEY: envKey, // process env must override fileKey
+      }),
+    });
 
-    child.stdout?.on('data', (d) => { stdout += d.toString(); });
-    child.stderr?.on('data', (d) => { stderr += d.toString(); });
+    child.stdout?.on('data', (d) => {
+      stdout += d.toString();
+    });
+    child.stderr?.on('data', (d) => {
+      stderr += d.toString();
+    });
 
     const health = await waitForHealth(targetPort);
     assert.equal(health.status, 200);

@@ -43,8 +43,8 @@ Là người phát triển, tôi muốn tái sử dụng component FE003, giữ 
 
 ### Quy ước cho Gemini
 
-- Đọc `AGENTS.md`, `specs/F000-pattern.md`, `specs/frontend-plan.md`, `specs/FE003-ui-components.md`, nhất là lịch sử sửa cuối FE003.
-- Tuân thủ quyền sửa file của AGENTS.md. Khi được giao triển khai FE004, chỉ sửa frontend và tài liệu FE004/frontend-plan/README liên quan.
+- Đọc `AGENTS.md`, `specs/F000-pattern.md`, `specs/FE000.md`, `specs/FE003-ui-components.md`, nhất là lịch sử sửa cuối FE003.
+- Tuân thủ quyền sửa file của AGENTS.md. Khi được giao triển khai FE004, chỉ sửa frontend và tài liệu FE004/FE000/README liên quan.
 - Thực hiện TASK-001 → TASK-008 tuần tự; viết test hành vi/cấu trúc trước logic tương ứng.
 - Không đánh dấu tiêu chí hình ảnh hoàn tất chỉ dựa vào HTTP 200, jsdom hoặc build.
 - Khi sandbox lỗi CryptUnprotectData, dùng PowerShell ngoài sandbox theo cơ chế quyền công cụ; không tìm cách đổi thiết lập bảo mật.
@@ -64,22 +64,22 @@ Figma file `tUMuB5lsAJ9gBPuQ6bJIQB`, page `1805:1587`.
 - Nếu không truy cập được, báo phần đối chiếu đang bị chặn; không tự tuyên bố khớp Figma.
 - Tái sử dụng SVG trong `public/assets/icons/`, không vẽ lại, không dùng URL Figma tạm trong runtime.
 
-| Thành phần | Mốc tại viewport 1440px |
-|---|---|
-| Nền toàn trang | #000000; Inter 14px/22px; code JetBrains Mono 12px/18px |
-| Top bar | cao 63px, viền dưới 1px; nội dung từ x=112 tới x=1328 |
-| Container chung | rộng tối đa 1216px, căn giữa; tại 1440px có lề trái/phải 112px |
-| Body | padding-top 24px, bắt đầu tại y=87 |
-| Khối so sánh | x=112, rộng 1016px |
-| Khoảng cách tới vùng thêm model | 32px |
-| Vùng thêm model | x=1160, rộng 168px; stretch theo chiều cao khối so sánh |
-| Thanh tiêu đề model | cao 64px, bo 18px, glass token; ba cột bằng nhau và hai divider 1px |
-| ModelHeader | padding 12px 28px; name 14px/20px, provider 12px/16px; nút xóa 32px nền trắng 8% |
-| Câu hỏi | căn phải trong khối so sánh, chừa phải 28px; bubble rộng 454px, padding 12px 16px, bo 16px |
-| Câu hỏi lượt 1 | cách thanh model 24px; mẫu cao 68px, answers bắt đầu y=243 |
-| Cột câu trả lời | padding trên 24px, ngang 28px, dưới 40px; gap nội dung 14px |
-| Lượt 2 | có viền trên ngăn lượt; câu hỏi cách viền 33px |
-| Composer | wrapper padding-top 40px, padding-bottom 24px; form rộng 760px, căn giữa TOÀN container, một dòng cao 54px |
+| Thành phần                      | Mốc tại viewport 1440px                                                                                    |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Nền toàn trang                  | #000000; Inter 14px/22px; code JetBrains Mono 12px/18px                                                    |
+| Top bar                         | cao 63px, viền dưới 1px; nội dung từ x=112 tới x=1328                                                      |
+| Container chung                 | rộng tối đa 1216px, căn giữa; tại 1440px có lề trái/phải 112px                                             |
+| Body                            | padding-top 24px, bắt đầu tại y=87                                                                         |
+| Khối so sánh                    | x=112, rộng 1016px                                                                                         |
+| Khoảng cách tới vùng thêm model | 32px                                                                                                       |
+| Vùng thêm model                 | x=1160, rộng 168px; stretch theo chiều cao khối so sánh                                                    |
+| Thanh tiêu đề model             | cao 64px, bo 18px, glass token; ba cột bằng nhau và hai divider 1px                                        |
+| ModelHeader                     | padding 12px 28px; name 14px/20px, provider 12px/16px; nút xóa 32px nền trắng 8%                           |
+| Câu hỏi                         | căn phải trong khối so sánh, chừa phải 28px; bubble rộng 454px, padding 12px 16px, bo 16px                 |
+| Câu hỏi lượt 1                  | cách thanh model 24px; mẫu cao 68px, answers bắt đầu y=243                                                 |
+| Cột câu trả lời                 | padding trên 24px, ngang 28px, dưới 40px; gap nội dung 14px                                                |
+| Lượt 2                          | có viền trên ngăn lượt; câu hỏi cách viền 33px                                                             |
+| Composer                        | wrapper padding-top 40px, padding-bottom 24px; form rộng 760px, căn giữa TOÀN container, một dòng cao 54px |
 
 Các mốc y phía dưới phụ thuộc typography và nội dung: Figma có hàng đáp án đầu cao 581px, hàng sau cao 447px, body kết thúc y=1372, form ở y=1412. Đây là mốc kiểm tra fixture, **không** phải lý do gán chiều cao cố định hoặc cắt nội dung.
 
@@ -199,10 +199,12 @@ export type CompareAction =
 
 ```json
 {
-  "blocks": [{
-    "type": "header",
-    "data": { "text": "Привет", "level": 2 }
-  }]
+  "blocks": [
+    {
+      "type": "header",
+      "data": { "text": "Привет", "level": 2 }
+    }
+  ]
 }
 ```
 
@@ -218,7 +220,7 @@ import Header from '@editorjs/header';
 
 const editor = new EditorJS({
   holder: 'editor',
-  tools: { header: Header }
+  tools: { header: Header },
 });
 ```
 
@@ -347,7 +349,7 @@ npm run build
 - [x] Nếu công cụ browser sandbox lỗi, chạy headless Chromium/Playwright qua PowerShell ngoài sandbox theo quyền công cụ; không dừng ở HTTP200.
 - [x] Chạy `git diff --check`; xác nhận backend và giấy phép font không bị sửa, chỉ một .gitignore gốc.
 - [x] Cập nhật README: URL trang chính/showcase, dữ liệu demo, lệnh chạy và giới hạn desktop.
-- [x] Cập nhật `specs/frontend-plan.md` bước 4 với link FE004 và trạng thái dựa trên kiểm tra.
+- [x] Cập nhật `specs/FE000.md` bước 4 với link FE004 và trạng thái dựa trên kiểm tra.
 - [x] Bổ sung mục lịch sử ở CUỐI spec này: ngày, task thực hiện, files đổi, số test, kết quả lệnh, viewport đã kiểm tra, đường dẫn ảnh/bằng chứng, sai khác còn lại.
 - [x] Không tự tick hoàn tất khi chưa xem ảnh hoặc còn sai khác đáng kể. Bàn giao cho bước 5: callbacks CompareAction đã có, dữ liệu vẫn fixture; bước 5 sẽ triển khai thay đổi models/turns và chia sẻ thực tế.
 
@@ -362,7 +364,7 @@ npm run build
   - Core grid & Cell: `src/features/compare/components/CompareGrid.tsx/.module.css/.test.tsx`, `AnswerCell.tsx/.module.css/.test.tsx`.
   - Tinh chỉnh FE003: `ModelHeader.tsx/.module.css`, `QuestionBubble.tsx/.module.css`, `AnswerError.tsx/.module.css`, `AnswerContent.tsx/.module.css`, `CodeBlock.tsx`.
   - ComparePage & composer: `src/features/compare/ComparePage.tsx/.module.css/.test.tsx`.
-  - Cấu hình & tài liệu: `frontend/index.html`, `package.json`, `verify-fe004.mjs`, `README.md`, `specs/frontend-plan.md`, `specs/FE004-desktop-comparison.md`.
+  - Cấu hình & tài liệu: `frontend/index.html`, `package.json`, `verify-fe004.mjs`, `README.md`, `specs/FE000.md`, `specs/FE004-desktop-comparison.md`.
 - **Kết quả kiểm thử & lệnh:**
   - `npm test`: 18/18 test files, 90/90 tests pass (giữ nguyên 62 baseline tests FE003 + 28 tests mới FE004).
   - `npm run typecheck`: exit code 0.
@@ -387,13 +389,13 @@ npm run build
 
 **Các thay đổi đã thực hiện:**
 
-| Vấn đề | Nội dung sửa | Files liên quan (tính từ `frontend/`) |
-|---|---|---|
-| Composer co còn 230px, placeholder xuống dòng | Cho form stretch hết wrapper 760px. Đo lại chính phần tử `form`: x=340, rộng 760px, cao 54px; textarea cao 36px, nút gửi 36×36px. | `src/features/compare/ComparePage.module.css` |
-| Hai hàng đáp án mất divider | Chuyển `.cellWithBorder` sang đúng CSS Module mà CompareGrid sử dụng. Cột 2 và 3 của mỗi hàng có border-left 1px, cột 1 không có; x ranh giới khớp model bar trong dung sai 2px. | `components/CompareGrid.module.css`, `components/AnswerCell.module.css` thuộc `src/features/compare/` |
-| Thought/error/add column khác Figma | ThoughtStatus có optional variant `inline`: dòng icon và chữ 14px/22px, không badge/margin thừa, nhãn `Думала 4 секунды`. AnswerError có optional variant `desktop`: nền trong suốt, message semibold, description 14px/22px. Các variant mặc định giữ cách hiển thị showcase FE003. Nhãn thêm model đổi sang trắng, SVG plus giữ kích thước gốc 16px, padding ngang vùng thêm model 12px. | `components/ThoughtStatus.tsx/.module.css`, `AnswerError.tsx/.module.css`, `AnswerCell.tsx`, `AddModelColumn.tsx/.module.css` |
-| Fixture và trình bày nội dung chưa khớp frame | Đặt heading Claude trước đoạn so sánh HTML/JSON, dùng đúng đoạn văn và inline code JSON; rút danh sách Yandex hai lượt theo nội dung Figma. Scope style bảng trong AnswerCell: bỏ inset ngoài, tên editor semibold, giữ divider hàng cuối; loại margin cuối của prose để không cộng thêm khoảng cách tới metadata. | `src/features/compare/desktopFixtures.ts`, `components/AnswerCell.tsx/.module.css` |
-| Script nghiệm thu báo thành công dù layout sai | Đo trực tiếp `form`, thêm assertion cho kích thước, divider thực tế, đồng hàng/đồng cột, sticky, typography, action demo, clipboard thật và trường hợp bị từ chối, multiline/resize, viewport, focus, reduced motion, showcase và lỗi console/page/network. Script dùng Vite server riêng với cổng hệ điều hành cấp, lấy URL thực từ server thay vì mặc định kiểm tra nhầm server đang chạy trên 5173. Đóng browser/server bằng finally; reload trang sạch trước khi ghi ảnh. Assertion thất bại trả exit code 1. | `verify-fe004.mjs` |
+| Vấn đề                                         | Nội dung sửa                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | Files liên quan (tính từ `frontend/`)                                                                                         |
+| ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Composer co còn 230px, placeholder xuống dòng  | Cho form stretch hết wrapper 760px. Đo lại chính phần tử `form`: x=340, rộng 760px, cao 54px; textarea cao 36px, nút gửi 36×36px.                                                                                                                                                                                                                                                                                                                                                                                 | `src/features/compare/ComparePage.module.css`                                                                                 |
+| Hai hàng đáp án mất divider                    | Chuyển `.cellWithBorder` sang đúng CSS Module mà CompareGrid sử dụng. Cột 2 và 3 của mỗi hàng có border-left 1px, cột 1 không có; x ranh giới khớp model bar trong dung sai 2px.                                                                                                                                                                                                                                                                                                                                  | `components/CompareGrid.module.css`, `components/AnswerCell.module.css` thuộc `src/features/compare/`                         |
+| Thought/error/add column khác Figma            | ThoughtStatus có optional variant `inline`: dòng icon và chữ 14px/22px, không badge/margin thừa, nhãn `Думала 4 секунды`. AnswerError có optional variant `desktop`: nền trong suốt, message semibold, description 14px/22px. Các variant mặc định giữ cách hiển thị showcase FE003. Nhãn thêm model đổi sang trắng, SVG plus giữ kích thước gốc 16px, padding ngang vùng thêm model 12px.                                                                                                                        | `components/ThoughtStatus.tsx/.module.css`, `AnswerError.tsx/.module.css`, `AnswerCell.tsx`, `AddModelColumn.tsx/.module.css` |
+| Fixture và trình bày nội dung chưa khớp frame  | Đặt heading Claude trước đoạn so sánh HTML/JSON, dùng đúng đoạn văn và inline code JSON; rút danh sách Yandex hai lượt theo nội dung Figma. Scope style bảng trong AnswerCell: bỏ inset ngoài, tên editor semibold, giữ divider hàng cuối; loại margin cuối của prose để không cộng thêm khoảng cách tới metadata.                                                                                                                                                                                                | `src/features/compare/desktopFixtures.ts`, `components/AnswerCell.tsx/.module.css`                                            |
+| Script nghiệm thu báo thành công dù layout sai | Đo trực tiếp `form`, thêm assertion cho kích thước, divider thực tế, đồng hàng/đồng cột, sticky, typography, action demo, clipboard thật và trường hợp bị từ chối, multiline/resize, viewport, focus, reduced motion, showcase và lỗi console/page/network. Script dùng Vite server riêng với cổng hệ điều hành cấp, lấy URL thực từ server thay vì mặc định kiểm tra nhầm server đang chạy trên 5173. Đóng browser/server bằng finally; reload trang sạch trước khi ghi ảnh. Assertion thất bại trả exit code 1. | `verify-fe004.mjs`                                                                                                            |
 
 **Kiểm thử và bằng chứng:**
 

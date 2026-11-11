@@ -36,7 +36,7 @@ Là người phát triển, tôi muốn ghép các component này thành màn h�
 
 ### Quy ước bàn giao Gemini
 
-- Đọc `AGENTS.md`, `specs/frontend-plan.md` và spec này trước khi triển khai.
+- Đọc `AGENTS.md`, `specs/FE000.md` và spec này trước khi triển khai.
 - Làm tuần tự TASK-001 → TASK-008. Viết test hành vi trước phần logic tương ứng.
 - Các đường dẫn dưới đây tính từ `frontend/`, trừ khi ghi khác.
 - Chỉ có `.gitignore` ở root repository.
@@ -197,13 +197,13 @@ type AnswerContentProps = {
 
 ```ts
 type ThoughtStatusProps = {
-  state: "thinking" | "done";
+  state: 'thinking' | 'done';
   text?: string;
   durationSeconds?: number;
 };
 
 type AnswerStatusProps = {
-  state: "waiting" | "generating";
+  state: 'waiting' | 'generating';
 };
 
 type AnswerErrorProps = {
@@ -265,7 +265,7 @@ type PromptFormProps = {
 
 ### TASK-008 - Kiểm tra nghiệm thu và bàn giao
 
-**Files:** sửa `README.md` (nếu cần) và `specs/frontend-plan.md` (đường dẫn cuối tính từ root repository).
+**Files:** sửa `README.md` (nếu cần) và `specs/FE000.md` (đường dẫn cuối tính từ root repository).
 
 - [x] Giữ nguyên hai file giấy phép font `.txt` hiện có trong `public/assets/fonts/`.
 - [x] Chạy lần lượt từ `frontend/`:
@@ -279,9 +279,8 @@ npm run build
 - [x] Kiểm tra output build có font và các asset; không có URL asset Figma tạm.
 - [x] Chạy `git diff --check`; kiểm tra không xuất hiện `.gitignore` con hoặc thay đổi backend.
 - [x] Báo lại: component đã làm, kết quả lệnh thực tế, kết quả đối chiếu hình ảnh và phần chưa xác minh.
-- [x] Cập nhật bước 3 trong frontend-plan với liên kết spec và trạng thái thực tế; không đánh dấu hoàn tất nếu còn tiêu chí bắt buộc chưa đạt.
+- [x] Cập nhật bước 3 trong FE000 với liên kết spec và trạng thái thực tế; không đánh dấu hoàn tất nếu còn tiêu chí bắt buộc chưa đạt.
 - [x] Bàn giao bước 4 qua props/callback nêu trên; chưa tự triển khai màn hình so sánh hoàn chỉnh.
-
 
 ## Lịch sử thay đổi
 
@@ -289,14 +288,14 @@ npm run build
 
 **Phạm vi được người dùng duyệt:** sửa 6 mục trong báo cáo review và ghi lịch sử tại cuối SPEC; chưa triển khai hoặc tạo SPEC FE004.
 
-| Mục | Kết quả sửa |
-|---|---|
-| Nút gửi/dừng | PromptForm dùng nút tròn trắng 36×36px, giữ SVG đen gốc và kích thước icon. |
-| Textarea bị cắt | Đo lại chiều cao khi value, chiều rộng hoặc font thay đổi; dùng ResizeObserver có cleanup, bỏ qua notification chỉ đổi chiều cao để tránh vòng lặp. Chiều cao textarea 36–160px; form một dòng cao 54px. |
-| Bảng mobile khó đọc | Ô bảng có chiều rộng tối thiểu 120px, ngắt theo từ; bảng rộng cuộn trong wrapper, không đẩy rộng toàn trang. |
-| Style khác Figma | Căn lại padding/viền/màu của Button; PromptForm dùng nền third, bo góc 16px, focus ring rõ; CodeBlock dùng header cùng nền, thêm SVG Copy. Bảng bỏ khung/bo góc và nền header không có trong mẫu. |
-| Copy bất đồng bộ | Tách state vào instance được key theo code. Đổi nội dung tạo instance mới, promise từ lần copy cũ không thể ghi đè kết quả copy của nội dung mới. |
-| Newline Prism | Bỏ nội dung newline giả của token rỗng; chèn mỗi separator đúng một lần và giữ LF/CRLF. Tính danh sách separator một lần cho mỗi render. |
+| Mục                 | Kết quả sửa                                                                                                                                                                                              |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Nút gửi/dừng        | PromptForm dùng nút tròn trắng 36×36px, giữ SVG đen gốc và kích thước icon.                                                                                                                              |
+| Textarea bị cắt     | Đo lại chiều cao khi value, chiều rộng hoặc font thay đổi; dùng ResizeObserver có cleanup, bỏ qua notification chỉ đổi chiều cao để tránh vòng lặp. Chiều cao textarea 36–160px; form một dòng cao 54px. |
+| Bảng mobile khó đọc | Ô bảng có chiều rộng tối thiểu 120px, ngắt theo từ; bảng rộng cuộn trong wrapper, không đẩy rộng toàn trang.                                                                                             |
+| Style khác Figma    | Căn lại padding/viền/màu của Button; PromptForm dùng nền third, bo góc 16px, focus ring rõ; CodeBlock dùng header cùng nền, thêm SVG Copy. Bảng bỏ khung/bo góc và nền header không có trong mẫu.        |
+| Copy bất đồng bộ    | Tách state vào instance được key theo code. Đổi nội dung tạo instance mới, promise từ lần copy cũ không thể ghi đè kết quả copy của nội dung mới.                                                        |
+| Newline Prism       | Bỏ nội dung newline giả của token rỗng; chèn mỗi separator đúng một lần và giữ LF/CRLF. Tính danh sách separator một lần cho mỗi render.                                                                 |
 
 **Files thay đổi** (đường dẫn tính từ root repository):
 

@@ -39,8 +39,18 @@
   resize: none;
   overflow-y: hidden;
 }
-.textarea::placeholder { color: var(--color-text-secondary); }
-.actionButton { flex-shrink: 0; }
+.textarea::placeholder {
+  color: var(--color-text-secondary);
+}
+.error {
+  margin: 12px 0 0;
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+  color: var(--color-text-primary);
+}
+.actionButton {
+  flex-shrink: 0;
+}
 .actionButton .sendButton {
   width: 36px;
   height: 36px;

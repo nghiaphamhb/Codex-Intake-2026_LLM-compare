@@ -12,12 +12,7 @@ export type CompareGridProps = {
   className?: string;
 };
 
-export function CompareGrid({
-  models,
-  turns,
-  onAction,
-  className,
-}: CompareGridProps) {
+export function CompareGrid({ models, turns, onAction, className }: CompareGridProps) {
   const gridColumnsStyle = {
     '--model-columns': models.length,
   } as CSSProperties;
@@ -36,54 +31,51 @@ export function CompareGrid({
             <ModelHeader
               name={model.name}
               provider={model.provider}
-              onRemove={() =>
-                onAction({ type: 'remove-model', modelId: model.id })
-              }
+              removeDisabled={models.length <= 2}
+              onRemove={() => onAction({ type: 'remove-model', modelId: model.id })}
             />
           </div>
         ))}
       </div>
 
       {/* Turn list */}
-      {turns.map((turn, turnIdx) => {
-        const isFirst = turnIdx === 0;
-        return (
-          <section
-            key={turn.id}
-            className={isFirst ? undefined : styles.turn}
-          >
-            <div
-              className={
-                isFirst ? styles.firstTurnQuestion : styles.turnQuestion
-              }
-            >
-              <div className={styles.questionBubbleWrapper}>
-                <QuestionBubble text={turn.question} />
+      {turns.length === 0 ? (
+        <div className={styles.emptyTurns} role="status">
+          Задайте вопрос, чтобы начать сравнение.
+        </div>
+      ) : (
+        turns.map((turn, turnIdx) => {
+          const isFirst = turnIdx === 0;
+          return (
+            <section key={turn.id} className={isFirst ? undefined : styles.turn}>
+              <div className={isFirst ? styles.firstTurnQuestion : styles.turnQuestion}>
+                <div className={styles.questionBubbleWrapper}>
+                  <QuestionBubble text={turn.question} />
+                </div>
               </div>
-            </div>
 
-            <div className={styles.answersRow} style={gridColumnsStyle}>
-              {models.map((model, colIdx) => (
-                <AnswerCell
-                  key={model.id}
-                  model={model}
-                  turnId={turn.id}
-                  answer={turn.answers[model.id]}
-                  onRetry={() =>
-                    onAction({
-                      type: 'retry',
-                      turnId: turn.id,
-                      modelId: model.id,
-                    })
-                  }
-                  className={colIdx > 0 ? styles.cellWithBorder : undefined}
-                />
-              ))}
-            </div>
-          </section>
-        );
-      })}
+              <div className={styles.answersRow} style={gridColumnsStyle}>
+                {models.map((model, colIdx) => (
+                  <AnswerCell
+                    key={model.id}
+                    model={model}
+                    turnId={turn.id}
+                    answer={turn.answers[model.id]}
+                    onRetry={() =>
+                      onAction({
+                        type: 'retry',
+                        turnId: turn.id,
+                        modelId: model.id,
+                      })
+                    }
+                    className={colIdx > 0 ? styles.cellWithBorder : undefined}
+                  />
+                ))}
+              </div>
+            </section>
+          );
+        })
+      )}
     </div>
   );
 }
-
