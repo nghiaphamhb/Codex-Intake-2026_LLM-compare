@@ -1,4 +1,4 @@
-# F001 - Khởi chạy backend và health check
+# BE001 - Khởi chạy backend và health check
 
 ## Goal
 
@@ -11,6 +11,7 @@ Là người phát triển, tôi muốn chạy backend và gọi health endpoint
 ## Scope
 
 ### In
+
 - Backend nằm trong `backend/`, frontend sẽ nằm trong `frontend/`. Một repository, chưa dùng npm workspace.
 - Chọn Node.js 24.x, npm, Fastify 5.x, TypeScript 5.9.x và tsx 4.x. Ghi phiên bản cụ thể đã cài trong lockfile; không dùng beta.
 - ESM, TypeScript strict; runtime production chạy JavaScript đã build.
@@ -19,11 +20,12 @@ Là người phát triển, tôi muốn chạy backend và gọi health endpoint
 - Phân tách tạo app và mở cổng để test không cần mở cổng thật.
 
 ### Out
+
 - Proxy, token, database, Docker, CORS và hosting.
 - Kiểm tra sức khỏe upstream. Health chỉ xác nhận tiến trình backend có thể phục vụ HTTP.
 - Không viết frontend; không tự commit, push hoặc sửa file ngoài phạm vi đã được người dùng cho phép.
 
-Hướng dẫn bàn giao: đọc `AGENTS.md` và `specs/backend-plan.md` trước. Spec này là tài liệu thực thi, không tự cấp quyền sửa file: người triển khai vẫn cần được người dùng cho phép. Dùng `.agents/skills/writing-plans/SKILL.md`, `.agents/skills/karpathy-guidelines/SKILL.md` và skill test/verification khi triển khai. Giữ cấu trúc F000 theo yêu cầu người dùng, không đổi sang template mặc định của skill. Không cần hỏi lại các quyết định đã ghi ở đây. Khi thiếu quyền hoặc prerequisite, báo đúng phần thiếu, không tự đoán.
+Hướng dẫn bàn giao: đọc `AGENTS.md` và `specs/BE000.md` trước. Spec này là tài liệu thực thi, không tự cấp quyền sửa file: người triển khai vẫn cần được người dùng cho phép. Dùng `.agents/skills/writing-plans/SKILL.md`, `.agents/skills/karpathy-guidelines/SKILL.md` và skill test/verification khi triển khai. Giữ cấu trúc F000 theo yêu cầu người dùng, không đổi sang template mặc định của skill. Không cần hỏi lại các quyết định đã ghi ở đây. Khi thiếu quyền hoặc prerequisite, báo đúng phần thiếu, không tự đoán.
 
 ## Flow
 
@@ -79,7 +81,9 @@ Thực hiện TASK-001 → TASK-005. Mọi lệnh npm bên dưới chạy tại 
 
 ```ts
 import type { FastifyInstance } from 'fastify';
-export interface BuildAppOptions { logger?: boolean }
+export interface BuildAppOptions {
+  logger?: boolean;
+}
 export function buildApp(options: BuildAppOptions = {}): FastifyInstance;
 ```
 
@@ -113,7 +117,7 @@ test('GET /api/health returns ok', async (t) => {
 ### TASK-004 - Entry point mở cổng
 
 - [x] **Files:** tạo `backend/src/server.ts`.
-- [x] Import `buildApp` từ `./app.js`, tạo app với logger bật; `await app.listen({ port: 3000, host: '127.0.0.1' })` trong luồng khởi động có catch. F002 sẽ thay port bằng cấu hình env.
+- [x] Import `buildApp` từ `./app.js`, tạo app với logger bật; `await app.listen({ port: 3000, host: '127.0.0.1' })` trong luồng khởi động có catch. BE002 sẽ thay port bằng cấu hình env.
 - [x] Khi listen thất bại, ghi lỗi khởi động, đóng app nếu cần rồi đặt `process.exitCode = 1`; không để server tiếp tục như đã khởi động. Chưa có secret nên chưa cần log config; không thêm log request body.
 - [x] **Kiểm tra:** chạy `npm run dev`, tại terminal khác gọi `curl.exe -i http://127.0.0.1:3000/api/health` trên Windows (`curl -i ...` trên hệ khác). Mong đợi 200 và JSON ok. Dừng server bằng Ctrl+C sau kiểm tra.
 

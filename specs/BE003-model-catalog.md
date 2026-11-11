@@ -1,8 +1,8 @@
-# F003 - Danh sách mô hình
+# BE003 - Danh sách mô hình
 
 ## Goal
 
-Cung cấp danh sách mô hình thống nhất để frontend lựa chọn và F004 kiểm tra model ID. Phụ thuộc F001–F002; không cần gọi LLM để thực hiện feature này.
+Cung cấp danh sách mô hình thống nhất để frontend lựa chọn và BE004 kiểm tra model ID. Phụ thuộc BE001–BE002; không cần gọi LLM để thực hiện feature này.
 
 ## User Story
 
@@ -11,18 +11,20 @@ Là người dùng, tôi muốn biết ID, tên và nhà cung cấp của các m
 ## Scope
 
 ### In
+
 - `GET /api/models` trả HTTP 200, `{ "models": [...] }`.
 - Danh sách cho phép nằm trong backend, được cấu hình tĩnh cho bản tối thiểu. Đây là danh sách hỗ trợ, không phải trạng thái online của nhà cung cấp.
 - Mỗi model có ba trường bắt buộc `id`, `name`, `provider`.
-- Cùng một snapshot danh sách phục vụ GET và validation ở F004.
+- Cùng một snapshot danh sách phục vụ GET và validation ở BE004.
 - Test dùng danh sách giả truyền qua hàm tạo app; không có endpoint cho client sửa danh sách.
 
 ### Out
+
 - Không tự đoán model ID, không thêm endpoint `/models` upstream khi chưa có tài liệu.
 - Không tự host/fork proxy, đồng bộ catalog, cache, database, giá hoặc token usage.
 - Không kiểm tra đủ 2–4 model ở endpoint này; đây là catalog, không phải một lượt so sánh.
 
-Bàn giao: đọc `AGENTS.md`, `specs/backend-plan.md`, F001–F002. Dùng `.agents/skills/karpathy-guidelines/SKILL.md` và quy trình kiểm chứng của `.agents/skills/verification-before-completion/SKILL.md`. Đường dẫn tính từ root; lệnh npm chạy trong `backend/`. Chỉ sửa file khi đã có quyền triển khai từ người dùng, không tự commit.
+Bàn giao: đọc `AGENTS.md`, `specs/BE000.md`, BE001–BE002. Dùng `.agents/skills/karpathy-guidelines/SKILL.md` và quy trình kiểm chứng của `.agents/skills/verification-before-completion/SKILL.md`. Đường dẫn tính từ root; lệnh npm chạy trong `backend/`. Chỉ sửa file khi đã có quyền triển khai từ người dùng, không tự commit.
 
 ## Flow
 
@@ -33,9 +35,7 @@ Bàn giao: đọc `AGENTS.md`, `specs/backend-plan.md`, F001–F002. Dùng `.age
 
 ```json
 {
-  "models": [
-    { "id": "test/model-a", "name": "Model A", "provider": "Test provider" }
-  ]
+  "models": [{ "id": "test/model-a", "name": "Model A", "provider": "Test provider" }]
 }
 ```
 
@@ -54,7 +54,7 @@ Bàn giao: đọc `AGENTS.md`, `specs/backend-plan.md`, F001–F002. Dùng `.age
 - [x] ID duy nhất, tất cả field là chuỗi không rỗng và đã trim đúng trong cấu hình.
 - [x] Danh sách rỗng được xử lý bình thường; không phát hành test model như model thật.
 - [x] GET catalog không gọi upstream và không tiết lộ key/base URL.
-- [x] F004 có thể sử dụng cùng snapshot để kiểm tra model ID.
+- [x] BE004 có thể sử dụng cùng snapshot để kiểm tra model ID.
 - [ ] API và test có thể hoàn thành trước, nhưng chỉ xác nhận catalog thật khi ID/cách chọn model đã được ban tổ chức xác minh.
 
 ## Tasks
@@ -71,7 +71,7 @@ Thứ tự: TASK-001 là xác minh nguồn; nếu bị chặn, ghi nhận và v�
 ### TASK-002 - Kiểu Model và catalog có kiểm tra
 
 - [x] **Files:** tạo `backend/src/models.ts`, `backend/test/models.test.ts`.
-- [x] Export contract dùng nguyên tên cho F004:
+- [x] Export contract dùng nguyên tên cho BE004:
 
 ```ts
 export interface Model {
@@ -91,7 +91,7 @@ export function validateModels(models: readonly Model[]): void;
 ### TASK-003 - Snapshot và route GET
 
 - [x] **Files:** sửa `backend/src/app.ts`, tạo `backend/src/routes/models.ts`; cập nhật `backend/test/models.test.ts`.
-- [x] Mở rộng contract F001, giữ `logger` và hành vi app cũ:
+- [x] Mở rộng contract BE001, giữ `logger` và hành vi app cũ:
 
 ```ts
 // app.ts: import type Model từ './models.js'
@@ -100,17 +100,14 @@ export interface BuildAppOptions {
   models?: readonly Model[];
 }
 // routes/models.ts
-export function registerModelRoutes(
-  app: FastifyInstance,
-  models: readonly Model[],
-): void;
+export function registerModelRoutes(app: FastifyInstance, models: readonly Model[]): void;
 ```
 
-- [x] Trong `buildApp`, dùng `options.models ?? configuredModels`; validate trước khi tạo Fastify instance để không tạo handle khi config sai. Tạo snapshot bằng `.map(({ id, name, provider }) => ({ id, name, provider }))`. Giữ snapshot là biến cục bộ, không mutable global registry. F004 sẽ dùng cùng biến này.
+- [x] Trong `buildApp`, dùng `options.models ?? configuredModels`; validate trước khi tạo Fastify instance để không tạo handle khi config sai. Tạo snapshot bằng `.map(({ id, name, provider }) => ({ id, name, provider }))`. Giữ snapshot là biến cục bộ, không mutable global registry. BE004 sẽ dùng cùng biến này.
 - [x] Route helper đăng ký trực tiếp `app.get('/api/models', ...)`; gọi helper từ `buildApp`. Không cần plugin framework hoặc service class.
 - [x] Thêm response schema 200: object bắt buộc `models`, array items là object với ba string field bắt buộc, `additionalProperties: false` cho outer và item. Chỉ trả metadata công khai; không expose toàn bộ config.
 - [x] Test inject dùng `{ models: [{ id: 'test/model-a', name: 'Model A', provider: 'Test' }] }`, không sửa catalog production để test pass.
-- [x] **Kiểm tra:** GET trả deep-equal fixture công khai, đúng JSON content type; F001 health vẫn pass.
+- [x] **Kiểm tra:** GET trả deep-equal fixture công khai, đúng JSON content type; BE001 health vẫn pass.
 
 ### TASK-004 - Test trường hợp biên và tính độc lập
 
@@ -124,6 +121,6 @@ export function registerModelRoutes(
 ### TASK-005 - Đối chiếu dữ liệu và bàn giao
 
 - [x] Chạy `npm test`, `npm run typecheck`, `npm run build` tại `backend/`.
-- [x] Khi startup đã cấu hình đúng theo F002, gọi `curl.exe -i http://127.0.0.1:3000/api/models` (hoặc port đã chọn); so sánh với catalog cấu hình.
+- [x] Khi startup đã cấu hình đúng theo BE002, gọi `curl.exe -i http://127.0.0.1:3000/api/models` (hoặc port đã chọn); so sánh với catalog cấu hình.
 - [x] Nếu TASK-001 còn chờ, báo rõ: route/test hoàn thành, catalog thật chưa nghiệm thu; không tạo endpoint upstream giả để bỏ qua blocker. Không dùng key giả để tuyên bố model hoạt động.
-- [x] Bàn giao model contract cho F004: `Model`, `configuredModels`, `validateModels`, `BuildAppOptions.models` và snapshot cục bộ trong `buildApp`. Không tự mở rộng sang generation.
+- [x] Bàn giao model contract cho BE004: `Model`, `configuredModels`, `validateModels`, `BuildAppOptions.models` và snapshot cục bộ trong `buildApp`. Không tự mở rộng sang generation.

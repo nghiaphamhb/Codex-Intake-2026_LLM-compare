@@ -1,4 +1,11 @@
-import { useRef, useLayoutEffect, useId, type FormEvent, type KeyboardEvent } from 'react';
+import {
+  useRef,
+  useLayoutEffect,
+  useId,
+  type FormEvent,
+  type KeyboardEvent,
+  type RefObject,
+} from 'react';
 import { IconButton } from '../../../components/ui/IconButton';
 import styles from './PromptForm.module.css';
 
@@ -8,6 +15,8 @@ export type PromptFormProps = {
   busy: boolean;
   onSend: (prompt: string) => void;
   onStop: () => void;
+  inputRef?: RefObject<HTMLTextAreaElement | null>;
+  error?: string;
 };
 
 export function PromptForm({
@@ -16,10 +25,14 @@ export function PromptForm({
   busy,
   onSend,
   onStop,
+  inputRef,
+  error,
 }: PromptFormProps) {
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const internalRef = useRef<HTMLTextAreaElement>(null);
+  const textareaRef = inputRef || internalRef;
   const isComposingRef = useRef(false);
   const inputId = useId();
+  const errorId = `${inputId}-error`;
 
   useLayoutEffect(() => {
     const textarea = textareaRef.current;
@@ -35,20 +48,23 @@ export function PromptForm({
       textarea.style.overflowY = height > 160 ? 'auto' : 'hidden';
     };
     resize();
-    const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(() => {
-      const width = textarea.getBoundingClientRect().width;
-      if (width !== lastWidth) {
-        lastWidth = width;
-        resize();
-      }
-    });
+    const observer =
+      typeof ResizeObserver === 'undefined'
+        ? undefined
+        : new ResizeObserver(() => {
+            const width = textarea.getBoundingClientRect().width;
+            if (width !== lastWidth) {
+              lastWidth = width;
+              resize();
+            }
+          });
     observer?.observe(textarea);
     void document.fonts?.ready.then(resize);
     return () => {
       active = false;
       observer?.disconnect();
     };
-  }, [value]);
+  }, [value, textareaRef]);
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -80,45 +96,53 @@ export function PromptForm({
   const isSendDisabled = value.trim().length === 0;
 
   return (
-    <form className={styles.form} onSubmit={handleSubmit}>
-      <label htmlFor={inputId} className={styles.visuallyHidden}>
-        Задайте вопрос всем моделям
-      </label>
-      <textarea
-        id={inputId}
-        ref={textareaRef}
-        className={styles.textarea}
-        placeholder="Задайте вопрос всем моделям"
-        value={value}
-        onChange={(e) => onValueChange(e.target.value)}
-        onKeyDown={handleKeyDown}
-        onCompositionStart={() => {
-          isComposingRef.current = true;
-        }}
-        onCompositionEnd={() => {
-          isComposingRef.current = false;
-        }}
-      />
-      <div className={styles.actionButton}>
-        {busy ? (
-          <IconButton
-            className={styles.sendButton}
-            type="button"
-            label="Остановить генерацию"
-            iconSrc="/assets/icons/stop.svg"
-            onClick={onStop}
-          />
-        ) : (
-          <IconButton
-            className={styles.sendButton}
-            type="submit"
-            label="Отправить вопрос"
-            iconSrc="/assets/icons/send.svg"
-            disabled={isSendDisabled}
-          />
-        )}
-      </div>
-    </form>
+    <>
+      <form className={styles.form} onSubmit={handleSubmit}>
+        <label htmlFor={inputId} className={styles.visuallyHidden}>
+          Задайте вопрос всем моделям
+        </label>
+        <textarea
+          id={inputId}
+          ref={textareaRef}
+          className={styles.textarea}
+          placeholder="Задайте вопрос всем моделям"
+          value={value}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? errorId : undefined}
+          onChange={(e) => onValueChange(e.target.value)}
+          onKeyDown={handleKeyDown}
+          onCompositionStart={() => {
+            isComposingRef.current = true;
+          }}
+          onCompositionEnd={() => {
+            isComposingRef.current = false;
+          }}
+        />
+        <div className={styles.actionButton}>
+          {busy ? (
+            <IconButton
+              className={styles.sendButton}
+              type="button"
+              label="Остановить генерацию"
+              iconSrc="/assets/icons/stop.svg"
+              onClick={onStop}
+            />
+          ) : (
+            <IconButton
+              className={styles.sendButton}
+              type="submit"
+              label="Отправить вопрос"
+              iconSrc="/assets/icons/send.svg"
+              disabled={isSendDisabled}
+            />
+          )}
+        </div>
+      </form>
+      {error && (
+        <p id={errorId} role="alert" className={styles.error}>
+          {error}
+        </p>
+      )}
+    </>
   );
 }
-

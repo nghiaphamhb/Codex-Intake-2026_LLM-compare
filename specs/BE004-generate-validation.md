@@ -1,8 +1,8 @@
-# F004 - Kiểm tra yêu cầu sinh câu trả lời
+# BE004 - Kiểm tra yêu cầu sinh câu trả lời
 
 ## Goal
 
-Chấp nhận request có câu hỏi hợp lệ và model ID nằm trong catalog trước khi triển khai gọi proxy ở F005. Phụ thuộc F001–F003. F004 không sinh văn bản và không tiêu hao hạn mức API.
+Chấp nhận request có câu hỏi hợp lệ và model ID nằm trong catalog trước khi triển khai gọi proxy ở BE005. Phụ thuộc BE001–BE003. BE004 không sinh văn bản và không tiêu hao hạn mức API.
 
 ## User Story
 
@@ -11,28 +11,30 @@ Là người dùng, tôi muốn được báo rõ khi câu hỏi hoặc mô hìn
 ## Scope
 
 ### In
+
 - `POST /api/generate`, nhận JSON `{ "prompt": string, "modelId": string }`.
 - Câu hỏi không chỉ có whitespace, tối đa 10000 Unicode code points theo JSON Schema `maxLength`, không dùng UTF-16 `.length` để kiểm tra giới hạn lần hai.
-- Model ID khớp chính xác catalog snapshot của F003, không trim/lowercase ID trong request.
+- Model ID khớp chính xác catalog snapshot của BE003, không trim/lowercase ID trong request.
 - Từ chối sai kiểu, thiếu field và field dư; không tự chuyển số thành chuỗi hoặc âm thầm xóa field dư.
 - Lỗi validation/JSON sai trả 400, `{ "error": { "code": "INVALID_REQUEST", "message": "..." } }`.
-- Request hợp lệ tạm trả 501 + `GENERATION_NOT_IMPLEMENTED`; F005 sẽ thay hành vi này bằng lời gọi proxy. Không dùng fake answer hoặc 200 để che việc chưa triển khai generation.
+- Request hợp lệ tạm trả 501 + `GENERATION_NOT_IMPLEMENTED`; BE005 sẽ thay hành vi này bằng lời gọi proxy. Không dùng fake answer hoặc 200 để che việc chưa triển khai generation.
 - Giữ lỗi HTTP parser khác như unsupported media type/oversized payload đúng status thay vì chuyển mọi lỗi thành 400.
 
 ### Out
+
 - Proxy, thời gian phản hồi, timeout upstream, streaming, retry và auth người dùng.
 - Không nhận array model; một request tương ứng một model. Frontend gửi 2–4 request đồng thời ở giai đoạn sau.
 - Không thêm Zod/Ajv trực tiếp hoặc framework lỗi mới: dùng schema/validator có sẵn của Fastify.
 
-Bàn giao cho Gemini: đọc `AGENTS.md`, `specs/backend-plan.md` và F001–F003. Dùng `.agents/skills/writing-plans/SKILL.md` để giữ task rõ ràng, `.agents/skills/karpathy-guidelines/SKILL.md` để tránh mở rộng scope và skill test/verification khi thực thi. Không sửa file ngoài quyền được cấp; không tự commit. Paths tính từ root repository, npm chạy tại `backend/`.
+Bàn giao cho Gemini: đọc `AGENTS.md`, `specs/BE000.md` và BE001–BE003. Dùng `.agents/skills/writing-plans/SKILL.md` để giữ task rõ ràng, `.agents/skills/karpathy-guidelines/SKILL.md` để tránh mở rộng scope và skill test/verification khi thực thi. Không sửa file ngoài quyền được cấp; không tự commit. Paths tính từ root repository, npm chạy tại `backend/`.
 
 ## Flow
 
 1. Fastify parse JSON và kiểm tra schema.
-2. Handler kiểm tra `prompt.trim().length > 0`, nhưng giữ nguyên prompt hợp lệ cho F005, không trim nội dung gửi LLM.
+2. Handler kiểm tra `prompt.trim().length > 0`, nhưng giữ nguyên prompt hợp lệ cho BE005, không trim nội dung gửi LLM.
 3. Handler tìm model ID chính xác trong snapshot dùng cho `/api/models`.
 4. Bước nào không hợp lệ: trả 400, không gọi upstream, không echo prompt.
-5. Hợp lệ: trả 501 với thông báo generation chưa triển khai. Đây chỉ là trạng thái giữa F004 và F005.
+5. Hợp lệ: trả 501 với thông báo generation chưa triển khai. Đây chỉ là trạng thái giữa BE004 và BE005.
 
 ## Edge Cases
 
@@ -52,7 +54,7 @@ Bàn giao cho Gemini: đọc `AGENTS.md`, `specs/backend-plan.md` và F001–F00
 - [ ] Giới hạn 10000 code points đúng cả BMP và emoji.
 - [ ] Catalog GET và generate validation dùng cùng snapshot; unknown model bị từ chối.
 - [ ] Lỗi parser 415/413 không biến thành 400/500; lỗi 500 không có stack/secret.
-- [ ] Không có network call tới LLM trong feature này; F001–F003 không regression.
+- [ ] Không có network call tới LLM trong feature này; BE001–BE003 không regression.
 
 ## Tasks
 
@@ -64,7 +66,10 @@ Thực hiện tuần tự TASK-001 → TASK-006. Test dùng fixture model qua `b
 - [ ] Trong `generate.ts`, định nghĩa kiểu body và schema cùng file để không tách abstraction một lần dùng:
 
 ```ts
-interface GenerateBody { prompt: string; modelId: string }
+interface GenerateBody {
+  prompt: string;
+  modelId: string;
+}
 const bodySchema = {
   type: 'object',
   required: ['prompt', 'modelId'],
@@ -77,8 +82,8 @@ const bodySchema = {
 ```
 
 - [ ] Export `registerGenerateRoutes(app: FastifyInstance, models: readonly Model[]): void`, import `Model` từ `../models.js`. Đăng ký `app.post<{ Body: GenerateBody }>('/api/generate', { schema: { body: bodySchema } }, handler)`.
-- [ ] `app.ts` truyền chính snapshot đã tạo ở F003 vào helper, không tạo danh sách thứ hai, không lấy catalog từ request client.
-- [ ] Viết test thiếu `prompt`/sai `modelId` type trước, chạy thấy route chưa đáp ứng. Tạo route ban đầu trả 501 khi qua schema; TASK-002 và TASK-003 sẽ làm validation đầy đủ. Chưa cần response schema thành công 200 của F005.
+- [ ] `app.ts` truyền chính snapshot đã tạo ở BE003 vào helper, không tạo danh sách thứ hai, không lấy catalog từ request client.
+- [ ] Viết test thiếu `prompt`/sai `modelId` type trước, chạy thấy route chưa đáp ứng. Tạo route ban đầu trả 501 khi qua schema; TASK-002 và TASK-003 sẽ làm validation đầy đủ. Chưa cần response schema thành công 200 của BE005.
 - [ ] **Kiểm tra:** route tồn tại, schema reject field thiếu và request hợp lệ schema đi đến handler. Chưa đánh dấu acceptance toàn feature.
 
 ### TASK-002 - Validation nghiêm ngặt và kiểm tra ngữ nghĩa
@@ -99,20 +104,20 @@ ajv: {
 - [ ] Viết test `prompt: 123`, `modelId: 123`, field dư và prompt whitespace trước; chạy để thấy các trường hợp chưa bị chặn đúng, sau đó thêm cấu hình/logic.
 - [ ] Handler chỉ dùng `.trim()` để kiểm tra rỗng. Kiểm tra `models.some(model => model.id === request.body.modelId)`; không normalize ID. Không thêm `enum` động vào schema vì validation từ snapshot trong handler đã đủ.
 - [ ] Whitespace trả 400 với message `Prompt must not be blank`; ID không biết trả 400 `Unknown modelId`; cả hai dùng code `INVALID_REQUEST`. Không trả nguyên prompt hay danh sách cấu hình trong lỗi.
-- [ ] **Kiểm tra:** các ca trên trả 400; `prompt: '  Hello\nworld  '` với model đúng vẫn qua validation. Chưa trim/mutate body để dành nội dung chính xác cho F005.
+- [ ] **Kiểm tra:** các ca trên trả 400; `prompt: '  Hello\nworld  '` với model đúng vẫn qua validation. Chưa trim/mutate body để dành nội dung chính xác cho BE005.
 
 ### TASK-003 - Chuẩn hóa lỗi request và parser
 
 - [ ] **Files:** sửa `backend/src/app.ts` tại nơi đăng ký `setErrorHandler`; thêm test vào `backend/test/generate.test.ts`.
 - [ ] Handler lỗi đặt ở app scope trước các route; không tạo thư viện lỗi chung cho feature nhỏ. Thứ tự nhánh cần rõ:
 
-| Điều kiện | HTTP | code | message |
-|---|---|---|---|
-| Có `validation`, JSON parse lỗi hoặc body JSON rỗng | 400 | `INVALID_REQUEST` | `Invalid request body` |
-| Unsupported content type | 415 | `UNSUPPORTED_MEDIA_TYPE` | `Content-Type must be application/json` |
-| Payload vượt body limit của Fastify | 413 | `PAYLOAD_TOO_LARGE` | `Request body is too large` |
-| Lỗi HTTP 4xx khác do framework | Giữ status | `REQUEST_ERROR` | `Request could not be processed` |
-| Lỗi không phân loại hoặc 5xx | 500 | `INTERNAL_ERROR` | `Internal server error` |
+| Điều kiện                                           | HTTP       | code                     | message                                 |
+| --------------------------------------------------- | ---------- | ------------------------ | --------------------------------------- |
+| Có `validation`, JSON parse lỗi hoặc body JSON rỗng | 400        | `INVALID_REQUEST`        | `Invalid request body`                  |
+| Unsupported content type                            | 415        | `UNSUPPORTED_MEDIA_TYPE` | `Content-Type must be application/json` |
+| Payload vượt body limit của Fastify                 | 413        | `PAYLOAD_TOO_LARGE`      | `Request body is too large`             |
+| Lỗi HTTP 4xx khác do framework                      | Giữ status | `REQUEST_ERROR`          | `Request could not be processed`        |
+| Lỗi không phân loại hoặc 5xx                        | 500        | `INTERNAL_ERROR`         | `Internal server error`                 |
 
 - [ ] Dùng `error.validation`, `error.statusCode`, `error.code` sau khi thu hẹp kiểu an toàn; kiểm tra parser codes của Fastify 5 trong package đã cài (`FST_ERR_CTP_INVALID_JSON_BODY`, `FST_ERR_CTP_EMPTY_JSON_BODY`). Không ép mọi error có statusCode thành validation error.
 - [ ] Envelope luôn là `{ error: { code, message } }`. Không trả `error.message`, `error.stack`, `validation` nguyên bản hoặc request body ra client. Không log toàn bộ request/config/error object có thể chứa input; nếu cần log chỉ dùng request ID và phân loại lỗi an toàn.
@@ -134,7 +139,7 @@ ajv: {
 ```
 
 - [ ] Dùng `reply.code(501).send(...)` trực tiếp; không throw 501 qua error handler tổng quát vì nó sẽ được sanitize thành 500. Không tạo `fetch`, SDK, sleep, fake answer hoặc success 200.
-- [ ] Thêm comment ngắn trong handler rằng F005 thay đoạn này bằng upstream call sau validation. Không viết trước client proxy/interface/service chưa cần dùng.
+- [ ] Thêm comment ngắn trong handler rằng BE005 thay đoạn này bằng upstream call sau validation. Không viết trước client proxy/interface/service chưa cần dùng.
 - [ ] **Kiểm tra:** fixture model hợp lệ trả đúng 501/mã/message; invalid input vẫn trả 400 trước khi tới đoạn này.
 
 ### TASK-005 - Ma trận kiểm thử request
@@ -150,20 +155,21 @@ ajv: {
 
 ```ts
 const response = await app.inject({
-  method: 'POST', url: '/api/generate',
+  method: 'POST',
+  url: '/api/generate',
   payload: { prompt: 123, modelId: 'test/model-a' },
 });
 assert.equal(response.statusCode, 400);
 assert.equal(response.json().error.code, 'INVALID_REQUEST');
 ```
 
-- [ ] **Kiểm tra:** chạy `npm test`; mọi ca có status và assertion cụ thể. Không gọi upstream trong test hoặc source F004; test không cần token/mạng thật.
+- [ ] **Kiểm tra:** chạy `npm test`; mọi ca có status và assertion cụ thể. Không gọi upstream trong test hoặc source BE004; test không cần token/mạng thật.
 
-### TASK-006 - Kiểm tra toàn bộ và bàn giao cho F005
+### TASK-006 - Kiểm tra toàn bộ và bàn giao cho BE005
 
 - [ ] Chạy lần lượt `npm test`, `npm run typecheck`, `npm run build`, xác nhận tất cả exit 0. Báo số test/lệnh thực tế, không tuyên bố đã kiểm thử LLM.
-- [ ] Dùng terminal với env giả hợp lệ theo F002 để chạy server nếu cần smoke test. Catalog runtime có thể rỗng, vì vậy manual POST với test model trả 400 là đúng; chỉ inject test mới truyền test catalog để kiểm chứng đường 501. Không thêm fixture production để manual test đẹp hơn.
+- [ ] Dùng terminal với env giả hợp lệ theo BE002 để chạy server nếu cần smoke test. Catalog runtime có thể rỗng, vì vậy manual POST với test model trả 400 là đúng; chỉ inject test mới truyền test catalog để kiểm chứng đường 501. Không thêm fixture production để manual test đẹp hơn.
 - [ ] Rà không có token, request body log, upstream call, file frontend hoặc sửa đổi không liên quan. Không tự stage/commit/push.
-- [ ] Bàn giao F005: route nhận `GenerateBody`, đã validate prompt/model; dùng snapshot `Model[]` của F003. F005 phải thay placeholder 501 và cập nhật các test đường hợp lệ; giữ nguyên các test reject input của F004.
+- [ ] Bàn giao BE005: route nhận `GenerateBody`, đã validate prompt/model; dùng snapshot `Model[]` của BE003. BE005 phải thay placeholder 501 và cập nhật các test đường hợp lệ; giữ nguyên các test reject input của BE004.
 
 Tham khảo chính thức: [Fastify Validation and Serialization](https://fastify.dev/docs/latest/Reference/Validation-and-Serialization/), [Fastify setErrorHandler](https://fastify.dev/docs/latest/Reference/Server/#seterrorhandler), [Fastify Testing](https://fastify.dev/docs/latest/Guides/Testing/).

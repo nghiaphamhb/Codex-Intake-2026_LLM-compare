@@ -23,22 +23,16 @@ describe('AnswerCell', () => {
       },
     };
 
-    render(
-      <AnswerCell
-        model={model}
-        turnId="turn-1"
-        answer={successAnswer}
-        onRetry={vi.fn()}
-      />
-    );
+    render(<AnswerCell model={model} turnId="turn-1" answer={successAnswer} onRetry={vi.fn()} />);
 
     // Label on cell
-    expect(
-      screen.getByLabelText('Claude Haiku 5.5, turn-1')
-    ).toBeInTheDocument();
+    expect(screen.getByLabelText('Claude Haiku 5.5, turn-1')).toBeInTheDocument();
 
     // Thought status
-    expect(screen.getByRole('button', { name: 'Думала 4 секунды' })).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByRole('button', { name: 'Думала 4 секунды' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
 
     // Markdown content
     expect(screen.getByText('World')).toBeInTheDocument();
@@ -56,14 +50,7 @@ describe('AnswerCell', () => {
       description: 'Остальные ответы сохранены.',
     };
 
-    render(
-      <AnswerCell
-        model={model}
-        turnId="turn-1"
-        answer={errorAnswer}
-        onRetry={onRetry}
-      />
-    );
+    render(<AnswerCell model={model} turnId="turn-1" answer={errorAnswer} onRetry={onRetry} />);
 
     expect(screen.getByText('Модель не ответила за 60 секунд')).toBeInTheDocument();
     expect(screen.getByText('Остальные ответы сохранены.')).toBeInTheDocument();
@@ -76,19 +63,12 @@ describe('AnswerCell', () => {
     expect(screen.queryByText(/·/)).toBeNull();
   });
 
-  it('renders an empty cell with accessible label when answer is undefined', () => {
-    render(
-      <AnswerCell
-        model={model}
-        turnId="turn-1"
-        answer={undefined}
-        onRetry={vi.fn()}
-      />
-    );
+  it('renders placeholder text when answer is undefined without error or retry', () => {
+    render(<AnswerCell model={model} turnId="turn-1" answer={undefined} onRetry={vi.fn()} />);
 
     const emptyCell = screen.getByLabelText('Нет ответа: Claude Haiku 5.5');
     expect(emptyCell).toBeInTheDocument();
-    expect(emptyCell.textContent).toBe('');
+    expect(emptyCell).toHaveTextContent('Модель добавлена после этого вопроса.');
+    expect(screen.queryByRole('button')).toBeNull();
   });
 });
-

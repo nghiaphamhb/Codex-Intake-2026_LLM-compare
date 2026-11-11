@@ -36,5 +36,21 @@ describe('ModelHeader', () => {
     const buttons = screen.queryAllByRole('button');
     expect(buttons).toHaveLength(0);
   });
-});
 
+  it('disables remove button and provides explanatory Russian label when removeDisabled is true', async () => {
+    const handleRemove = vi.fn();
+    const user = userEvent.setup();
+
+    render(
+      <ModelHeader name="GPT-4o" provider="OpenAI" onRemove={handleRemove} removeDisabled={true} />,
+    );
+
+    const removeButton = screen.getByRole('button', {
+      name: 'Нужно оставить минимум 2 модели',
+    });
+    expect(removeButton).toBeDisabled();
+
+    await user.click(removeButton);
+    expect(handleRemove).not.toHaveBeenCalled();
+  });
+});

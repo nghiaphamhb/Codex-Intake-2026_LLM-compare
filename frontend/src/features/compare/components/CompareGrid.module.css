@@ -69,3 +69,9 @@
   border-left: 1px solid var(--color-stroke);
 }
 
+.emptyTurns {
+  padding: 64px 28px;
+  text-align: center;
+  color: var(--color-text-secondary);
+  font-size: 15px;
+}

@@ -5,6 +5,7 @@ export type ModelHeaderProps = {
   name: string;
   provider: string;
   onRemove?: () => void;
+  removeDisabled?: boolean;
   className?: string;
 };
 
@@ -12,6 +13,7 @@ export function ModelHeader({
   name,
   provider,
   onRemove,
+  removeDisabled = false,
   className,
 }: ModelHeaderProps) {
   return (
@@ -27,9 +29,10 @@ export function ModelHeader({
       {onRemove && (
         <div className={styles.removeButton}>
           <IconButton
-            label={`Удалить модель ${name}`}
+            label={removeDisabled ? 'Нужно оставить минимум 2 модели' : `Удалить модель ${name}`}
             iconSrc="/assets/icons/close.svg"
             onClick={onRemove}
+            disabled={removeDisabled}
             className={styles.closeIconButton}
           />
         </div>

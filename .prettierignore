@@ -1,0 +1,12 @@
+**/node_modules/
+**/dist/
+**/coverage/
+.agents/
+.codex/
+.husky/
+**/package-lock.json
+frontend/public/assets/
+.env
+.env.*
+*.tsbuildinfo
+frontend/artifacts/

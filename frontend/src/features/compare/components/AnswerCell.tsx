@@ -12,13 +12,7 @@ export type AnswerCellProps = {
   className?: string;
 };
 
-export function AnswerCell({
-  model,
-  turnId,
-  answer,
-  onRetry,
-  className,
-}: AnswerCellProps) {
+export function AnswerCell({ model, turnId, answer, onRetry, className }: AnswerCellProps) {
   const cellId = `cell-${model.id}-${turnId}`;
 
   if (!answer) {
@@ -27,7 +21,9 @@ export function AnswerCell({
         className={`${styles.cell} ${className || ''}`}
         aria-label={`Нет ответа: ${model.name}`}
         data-testid={cellId}
-      />
+      >
+        <div className={styles.missingPlaceholder}>Модель добавлена после этого вопроса.</div>
+      </div>
     );
   }
 
@@ -65,4 +61,3 @@ export function AnswerCell({
     </div>
   );
 }
-

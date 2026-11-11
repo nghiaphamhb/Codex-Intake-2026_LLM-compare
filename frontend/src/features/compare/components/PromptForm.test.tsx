@@ -12,7 +12,7 @@ describe('PromptForm', () => {
         busy={false}
         onSend={() => {}}
         onStop={() => {}}
-      />
+      />,
     );
 
     const textarea = screen.getByPlaceholderText('Задайте вопрос всем моделям');
@@ -32,7 +32,7 @@ describe('PromptForm', () => {
         busy={false}
         onSend={() => {}}
         onStop={() => {}}
-      />
+      />,
     );
 
     const textarea = screen.getByPlaceholderText('Задайте вопрос всем моделям');
@@ -52,7 +52,7 @@ describe('PromptForm', () => {
         busy={false}
         onSend={handleSend}
         onStop={() => {}}
-      />
+      />,
     );
 
     const sendBtn = screen.getByRole('button', { name: /отправить/i });
@@ -61,12 +61,12 @@ describe('PromptForm', () => {
     // Whitespace only
     rerender(
       <PromptForm
-        value={"   \n\t  "}
+        value={'   \n\t  '}
         onValueChange={() => {}}
         busy={false}
         onSend={handleSend}
         onStop={() => {}}
-      />
+      />,
     );
 
     expect(screen.getByRole('button', { name: /отправить/i })).toBeDisabled();
@@ -88,7 +88,7 @@ describe('PromptForm', () => {
         busy={false}
         onSend={handleSend}
         onStop={() => {}}
-      />
+      />,
     );
 
     const sendBtn = screen.getByRole('button', { name: /отправить/i });
@@ -115,7 +115,7 @@ describe('PromptForm', () => {
         busy={false}
         onSend={handleSend}
         onStop={() => {}}
-      />
+      />,
     );
 
     const textarea = screen.getByPlaceholderText('Задайте вопрос всем моделям');
@@ -134,7 +134,7 @@ describe('PromptForm', () => {
         busy={false}
         onSend={handleSend}
         onStop={() => {}}
-      />
+      />,
     );
 
     const textarea = screen.getByPlaceholderText('Задайте вопрос всем моделям');
@@ -167,7 +167,7 @@ describe('PromptForm', () => {
         busy={true}
         onSend={handleSend}
         onStop={handleStop}
-      />
+      />,
     );
 
     const textarea = screen.getByPlaceholderText('Задайте вопрос всем моделям');
@@ -193,35 +193,63 @@ describe('PromptForm sizing regressions', () => {
     let resized!: ResizeObserverCallback;
     const disconnect = vi.fn();
     class Observer {
-      constructor(callback: ResizeObserverCallback) { resized = callback; }
+      constructor(callback: ResizeObserverCallback) {
+        resized = callback;
+      }
       observe = vi.fn();
       disconnect = disconnect;
       unobserve = vi.fn();
     }
     vi.stubGlobal('ResizeObserver', Observer);
     let fontsReady!: () => void;
-    const ready = new Promise<void>((resolve) => { fontsReady = resolve; });
+    const ready = new Promise<void>((resolve) => {
+      fontsReady = resolve;
+    });
     Object.defineProperty(document, 'fonts', { configurable: true, value: { ready } });
     let height = 22;
     let width = 300;
-    const rect = vi.spyOn(HTMLTextAreaElement.prototype, 'getBoundingClientRect').mockImplementation(() => ({ width }) as DOMRect);
-    const measured = vi.spyOn(HTMLTextAreaElement.prototype, 'scrollHeight', 'get').mockImplementation(() => height);
+    const rect = vi
+      .spyOn(HTMLTextAreaElement.prototype, 'getBoundingClientRect')
+      .mockImplementation(() => ({ width }) as DOMRect);
+    const measured = vi
+      .spyOn(HTMLTextAreaElement.prototype, 'scrollHeight', 'get')
+      .mockImplementation(() => height);
     try {
-      const { unmount } = render(<PromptForm value="same text" onValueChange={() => {}} busy={false} onSend={() => {}} onStop={() => {}} />);
+      const { unmount } = render(
+        <PromptForm
+          value="same text"
+          onValueChange={() => {}}
+          busy={false}
+          onSend={() => {}}
+          onStop={() => {}}
+        />,
+      );
       const input = screen.getByRole('textbox');
       expect(input.style.height).toBe('36px');
       height = 88;
-      act(() => { width -= 10; resized([], {} as ResizeObserver); });
+      act(() => {
+        width -= 10;
+        resized([], {} as ResizeObserver);
+      });
       expect(input.style.height).toBe('88px');
       height = 110;
-      await act(async () => { fontsReady(); await ready; });
+      await act(async () => {
+        fontsReady();
+        await ready;
+      });
       expect(input.style.height).toBe('110px');
       height = 200;
-      act(() => { width -= 10; resized([], {} as ResizeObserver); });
+      act(() => {
+        width -= 10;
+        resized([], {} as ResizeObserver);
+      });
       expect(input.style.height).toBe('160px');
       expect(input.style.overflowY).toBe('auto');
       height = 22;
-      act(() => { width -= 10; resized([], {} as ResizeObserver); });
+      act(() => {
+        width -= 10;
+        resized([], {} as ResizeObserver);
+      });
       expect(input.style.height).toBe('36px');
       expect(input.style.overflowY).toBe('hidden');
       unmount();
@@ -232,5 +260,22 @@ describe('PromptForm sizing regressions', () => {
       vi.unstubAllGlobals();
       Reflect.deleteProperty(document, 'fonts');
     }
+  });
+
+  it('assigns the textarea DOM node to optional inputRef when provided', () => {
+    const ref = { current: null as HTMLTextAreaElement | null };
+    render(
+      <PromptForm
+        value=""
+        onValueChange={() => {}}
+        busy={false}
+        onSend={() => {}}
+        onStop={() => {}}
+        inputRef={ref}
+      />,
+    );
+
+    expect(ref.current).toBeInstanceOf(HTMLTextAreaElement);
+    expect(ref.current).toBe(screen.getByRole('textbox'));
   });
 });

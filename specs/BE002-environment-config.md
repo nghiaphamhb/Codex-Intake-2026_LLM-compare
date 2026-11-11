@@ -1,8 +1,8 @@
-# F002 - Cấu hình môi trường
+# BE002 - Cấu hình môi trường
 
 ## Goal
 
-Đọc cấu hình tập trung, dừng sớm khi cấu hình sai và giữ token ở backend. Phụ thuộc F001 đã hoàn thành; không thay đổi stack hoặc scripts đang hoạt động nếu không cần.
+Đọc cấu hình tập trung, dừng sớm khi cấu hình sai và giữ token ở backend. Phụ thuộc BE001 đã hoàn thành; không thay đổi stack hoặc scripts đang hoạt động nếu không cần.
 
 ## User Story
 
@@ -11,6 +11,7 @@ Là người vận hành, tôi muốn cấu hình backend qua biến môi trư�
 ## Scope
 
 ### In
+
 - `PORT`: mặc định 3000; số nguyên 1–65535.
 - `LLM_BASE_URL`: bắt buộc, URL tuyệt đối HTTP/HTTPS, không chứa username/password, query hoặc fragment. Cho phép path prefix; không tự gắn `/v1` hoặc đoán contract.
 - `LLM_API_KEY`: bắt buộc, chuỗi không rỗng; loại khoảng trắng hai đầu; không xuất ra log/response.
@@ -19,11 +20,12 @@ Là người vận hành, tôi muốn cấu hình backend qua biến môi trư�
 - Cấu hình mẫu và Git ignore secret/artifact. Không thêm dependency chỉ để đọc `.env` vì Node 24 đã hỗ trợ.
 
 ### Out
+
 - Không gọi proxy để xác thực token hoặc health check; không tự lấy/refresh token.
 - Không secret manager, không config class/service, không database.
 - Không tạo hoặc ghi đè `.env` thật của người dùng; chỉ tạo `.env.example` với placeholder.
 
-Bàn giao cho Gemini: đọc `AGENTS.md`, `specs/backend-plan.md`, `specs/F001-backend-health.md`. Thực thi task tuần tự với quyền sửa file được người dùng cấp; giữ cách tiếp cận tối thiểu theo `.agents/skills/karpathy-guidelines/SKILL.md`. Các đường dẫn dưới đây tính từ root repository; các lệnh npm chạy trong `backend/`. Không tự commit hoặc sửa scope.
+Bàn giao cho Gemini: đọc `AGENTS.md`, `specs/BE000.md`, `specs/BE001-backend-health.md`. Thực thi task tuần tự với quyền sửa file được người dùng cấp; giữ cách tiếp cận tối thiểu theo `.agents/skills/karpathy-guidelines/SKILL.md`. Các đường dẫn dưới đây tính từ root repository; các lệnh npm chạy trong `backend/`. Không tự commit hoặc sửa scope.
 
 ## Flow
 
@@ -48,7 +50,7 @@ Bàn giao cho Gemini: đọc `AGENTS.md`, `specs/backend-plan.md`, `specs/F001-b
 - [x] Cả source và JavaScript build dùng cùng logic config.
 - [x] `.env` không bắt buộc khi đã có env, env sẵn có không bị ghi đè bởi file.
 - [x] Token không xuất hiện trong lỗi, log hoặc Git; test không dùng token thật.
-- [x] Test của F001 vẫn chạy mà không cần cấu hình LLM.
+- [x] Test của BE001 vẫn chạy mà không cần cấu hình LLM.
 
 ## Tasks
 
@@ -76,9 +78,9 @@ export function readConfig(env: NodeJS.ProcessEnv): AppConfig;
 
 - [x] **Files:** sửa `backend/src/server.ts`; không làm `app.ts` phụ thuộc env.
 - [x] Import `existsSync` từ `node:fs`, `loadEnvFile` từ `node:process`, `readConfig` từ `./config.js`. Trong startup try/catch, nếu `existsSync('.env')` thì gọi `loadEnvFile('.env')`; sau đó `readConfig(process.env)` trước `buildApp`/`listen`.
-- [x] Sử dụng `config.port` khi listen; vẫn giữ host `127.0.0.1` từ F001. Key/base URL/timeout được đọc nhưng chưa gọi upstream hoặc truyền ra client; F005 sẽ sử dụng chúng.
+- [x] Sử dụng `config.port` khi listen; vẫn giữ host `127.0.0.1` từ BE001. Key/base URL/timeout được đọc nhưng chưa gọi upstream hoặc truyền ra client; BE005 sẽ sử dụng chúng.
 - [x] Catch lỗi config chỉ báo tên biến từ error an toàn; lỗi nạp file dùng thông báo tổng quát `Unable to load environment configuration`. Không `console.log(process.env)`, không log object config hay toàn bộ exception của thư viện đọc env.
-- [x] **Kiểm tra:** test F001 không cần key vẫn pass. Chạy tiến trình với env hợp lệ kiểm tra port; với env thiếu key, xác nhận dừng trước khi phục vụ health. Nếu máy đã có `.env` thật, không sửa/xóa file đó để tạo tình huống thiếu key; dùng tiến trình con với cwd tạm và env giả.
+- [x] **Kiểm tra:** test BE001 không cần key vẫn pass. Chạy tiến trình với env hợp lệ kiểm tra port; với env thiếu key, xác nhận dừng trước khi phục vụ health. Nếu máy đã có `.env` thật, không sửa/xóa file đó để tạo tình huống thiếu key; dùng tiến trình con với cwd tạm và env giả.
 
 ### TASK-003 - Cấu hình mẫu và Git ignore
 
