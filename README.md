@@ -4,7 +4,7 @@ So sánh câu trả lời của nhiều model cạnh nhau. Frontend dùng React/
 
 ## Trạng thái hiện tại
 
-FE005 đã hoàn thành: chọn 2–4 model, gửi câu hỏi, Retry, New, Copy code và xem suy nghĩ bằng dữ liệu giả trong bộ nhớ. Đáp án trả ngay; reload khôi phục fixture ban đầu. Chưa tích hợp LLM/streaming thật, lưu lịch sử hoặc chia sẻ khôi phục dữ liệu.
+FE005 đã hoàn thành ở frontend: chọn 2–4 model, gửi câu hỏi, Retry, New, Copy code và xem suy nghĩ bằng dữ liệu giả trong bộ nhớ. Đáp án frontend vẫn trả ngay và reload khôi phục fixture ban đầu; **frontend hiện đang mock và chưa kết nối backend**. Ở phía backend, BE005 đã hoàn tất tích hợp AI Proxy (`GET /api/models`, `POST /api/generate`) và đạt kiểm thử local theo OpenAPI bằng HTTP stub cục bộ; **chưa nghiệm thu key/model BTC thật**, streaming, lưu lịch sử hoặc chia sẻ khôi phục dữ liệu.
 
 ## Cài đặt và chạy
 
@@ -20,7 +20,7 @@ npm run dev --prefix frontend
 - [Màn hình so sánh](http://127.0.0.1:5173/)
 - [Component Showcase](http://127.0.0.1:5173/?view=components)
 
-Frontend hiện độc lập với backend. Để chạy backend, sao chép [backend/.env.example](backend/.env.example) thành `backend/.env`, thay cấu hình mẫu rồi chạy `npm run dev --prefix backend`. Không commit secret.
+Frontend hiện vẫn mock và chưa kết nối backend. Để chạy server backend (`npm run dev --prefix backend` hoặc `npm start --prefix backend`), sao chép [backend/.env.example](backend/.env.example) thành `backend/.env` và cấu hình `LLM_BASE_URL`, `LLM_API_KEY` hợp lệ: startup bắt buộc gọi `GET /models` tới proxy để nạp catalog thành công trước khi lắng nghe cổng. Bộ test tự động của backend (`npm test --prefix backend`) dùng HTTP stub cục bộ nên chạy được mà không cần key thật. Không commit secret.
 
 ## Các lệnh chính
 
@@ -50,9 +50,10 @@ Tooling root dùng TypeScript 5.9 cho parser ESLint; frontend vẫn dùng compil
 ## Tài liệu
 
 - [Lộ trình frontend](specs/FE000.md) · [Lộ trình backend](specs/BE000.md)
+- [BE004 — Validation generation](specs/BE004-generate-validation.md) · [BE005 — Tích hợp AI Proxy](specs/BE005-ai-proxy-integration.md)
 - [FE003 — Components](specs/FE003-ui-components.md)
 - [FE004 — Desktop](specs/FE004-desktop-comparison.md)
 - [FE005 — Tương tác và lịch sử nghiệm thu](specs/FE005-comparison-interactions.md)
 - [Pattern viết spec](specs/F000-pattern.md) · [Quy tắc làm việc](AGENTS.md)
 
-Bước tiếp theo: **mô phỏng tiến trình sinh câu trả lời**, chưa gọi API thật.
+Bước tiếp theo: backend cần **BE006 (nghiệm thu key/model BTC thật)**; frontend vẫn giữ bước tiếp theo ở phía giao diện và **chưa kết nối API backend**.
