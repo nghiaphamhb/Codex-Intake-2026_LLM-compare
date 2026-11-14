@@ -36,5 +36,16 @@ describe('AddModelColumn', () => {
     await user.keyboard(' ');
     expect(onAdd).toHaveBeenCalledTimes(2);
   });
-});
 
+  it('passes native disabled attribute and does not fire onAdd when disabled', async () => {
+    const user = userEvent.setup();
+    const onAdd = vi.fn();
+    render(<AddModelColumn onAdd={onAdd} disabled={true} />);
+
+    const button = screen.getByRole('button', { name: 'Добавить модель' });
+    expect(button).toBeDisabled();
+
+    await user.click(button);
+    expect(onAdd).not.toHaveBeenCalled();
+  });
+});

@@ -298,7 +298,7 @@ type ModelPickerProps = {
 
 ### TASK-011 — Browser và hình ảnh
 
-**Files:** `frontend/tests/browser/layout.mjs`, `interactions.mjs`, `helpers.mjs` (tổ chức lại từ các verifier FE004/FE005; giữ các assertion hồi quy hữu ích).
+**Files:** `frontend/scripts/layout.mjs`, `interactions.mjs`, `helpers.mjs` (tổ chức lại từ các verifier FE004/FE005; giữ các assertion hồi quy hữu ích).
 
 - [x] Giữ server cổng riêng/URL thực, fonts.ready, thu errors và finally cleanup.
 - [x] Initial ba model giữ geometry FE004; đo form thực x340/w760/h54 tại1440.
@@ -418,3 +418,8 @@ npm run test:browser
 - Các tên verifier/ảnh trong lịch sử phía trên là đường dẫn tại thời điểm kiểm tra, không phải lệnh hiện hành. README/FE000 chỉ cập nhật lệnh/đường dẫn liên quan; chưa thực hiện đề xuất cô đọng tài liệu. Không commit và không thay đổi các rename spec backend đang stage.
 
 - Kiểm tra sau cleanup: npm run test:browser pass cả layout/interactions; Vitest chỉ chạy21 file trong src, 145/145 tests pass; typecheck/build/lint và git diff --check exit0. Build vẫn cảnh báo bundle507,30kB.
+
+### 2026-11-13 — Chuyển browser scripts về scripts/
+
+- Đường dẫn hiện hành là `frontend/scripts/{helpers,layout,interactions}.mjs`; lệnh `npm run test:browser` giữ nguyên tên. Các đường dẫn tests/browser trong lịch sử ngày 12/11 là vị trí tại thời điểm đó.
+- Cập nhật npm script, ESLint browser globals, README, FE006 và đường dẫn tương đối tới Vite root/ảnh output trong helpers. Ảnh vẫn ở `frontend/artifacts/verification/`.

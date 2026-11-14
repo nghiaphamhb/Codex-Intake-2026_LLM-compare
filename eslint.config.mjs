@@ -32,7 +32,7 @@ export default defineConfig([
     },
   },
   {
-    files: ['frontend/src/**/*.{ts,tsx}', 'frontend/tests/browser/**/*.mjs'],
+    files: ['frontend/src/**/*.{ts,tsx}', 'frontend/scripts/**/*.mjs'],
     languageOptions: { globals: globals.browser },
   },
   {

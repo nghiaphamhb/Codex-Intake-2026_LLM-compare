@@ -1,7 +1,8 @@
-import type { CompareModel, ResultAnswer } from '../types';
-import { AnswerContent } from './AnswerContent';
-import { AnswerError } from './AnswerError';
-import { ThoughtStatus } from './ThoughtStatus';
+import type { CompareModel, ResultAnswer } from '../types.js';
+import { AnswerContent } from './AnswerContent.js';
+import { AnswerError } from './AnswerError.js';
+import { AnswerStatus } from './AnswerStatus.js';
+import { ThoughtStatus } from './ThoughtStatus.js';
 import styles from './AnswerCell.module.css';
 
 export type AnswerCellProps = {
@@ -33,6 +34,8 @@ export function AnswerCell({ model, turnId, answer, onRetry, className }: Answer
       aria-label={`${model.name}, ${turnId}`}
       data-testid={cellId}
     >
+      {answer.state === 'pending' && <AnswerStatus state="waiting" />}
+
       {answer.state === 'success' && (
         <>
           {answer.thought && (
@@ -45,7 +48,9 @@ export function AnswerCell({ model, turnId, answer, onRetry, className }: Answer
           )}
           <AnswerContent markdown={answer.markdown} className={styles.desktopContent} />
           <div className={styles.metadata}>
-            {answer.durationLabel} · {answer.costLabel}
+            {answer.costLabel
+              ? `${answer.durationLabel} · ${answer.costLabel}`
+              : answer.durationLabel}
           </div>
         </>
       )}

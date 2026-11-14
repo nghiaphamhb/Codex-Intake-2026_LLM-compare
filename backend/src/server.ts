@@ -8,9 +8,10 @@ import { readConfig } from './config.js';
 async function start() {
   let app: FastifyInstance | undefined;
   try {
-    if (existsSync('.env')) {
+    const envPath = new URL('../../.env', import.meta.url);
+    if (existsSync(envPath)) {
       try {
-        loadEnvFile('.env');
+        loadEnvFile(envPath);
       } catch {
         throw new Error('Unable to load environment configuration');
       }

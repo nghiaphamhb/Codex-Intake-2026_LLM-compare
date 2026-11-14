@@ -1,11 +1,41 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { render, screen, within, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, within, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { ComparePage } from './ComparePage';
-import { desktopModels, desktopTurns } from './desktopFixtures';
+import { ComparePage } from './ComparePage.js';
+import * as comparisonApi from './comparisonApi.js';
+import type { CompareModel } from './types.js';
+
+interface Deferred<T> {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+  reject: (reason?: unknown) => void;
+}
+
+function createDeferred<T>(): Deferred<T> {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
+const testCatalog: CompareModel[] = [
+  { id: 'test/model-1', name: 'Model One', provider: 'Provider A' },
+  { id: 'test/model-2', name: 'Model Two', provider: 'Provider B' },
+  { id: 'test/model-3', name: 'Model Three', provider: 'Provider C' },
+  { id: 'test/model-4', name: 'Model Four', provider: 'Provider D' },
+  { id: 'test/model-5', name: 'Model Five', provider: 'Provider E' },
+];
 
 describe('ComparePage', () => {
+  let fetchModelsSpy: ReturnType<typeof vi.spyOn>;
+  let generateAnswerSpy: ReturnType<typeof vi.spyOn>;
+
   beforeEach(() => {
+    vi.restoreAllMocks();
+
     if (!HTMLDialogElement.prototype.showModal) {
       HTMLDialogElement.prototype.showModal = function () {
         this.open = true;
@@ -16,375 +46,424 @@ describe('ComparePage', () => {
         this.open = false;
       };
     }
+
+    fetchModelsSpy = vi.spyOn(comparisonApi, 'fetchModels');
+    generateAnswerSpy = vi.spyOn(comparisonApi, 'generateAnswer');
   });
 
-  it('keeps the comparison explanation below its heading in the Claude answer', () => {
-    render(<ComparePage />);
-    const answer = screen.getByLabelText('Claude Haiku 5.5, turn-1');
-    const heading = within(answer).getByRole('heading', { name: 'Чем отличается от аналогов' });
-    const explanation = within(answer).getByText(
-      /Классические редакторы хранят результат как HTML/,
-    );
-    expect(
-      heading.compareDocumentPosition(explanation) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
-    expect(within(explanation).getByText('JSON', { selector: 'code' })).toBeInTheDocument();
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
-  it('renders default page with brand, actions, models, turns, add column, and empty prompt form', () => {
-    render(<ComparePage />);
+  describe('Catalog lifecycle', () => {
+    it('displays loading banner and disables inputs while catalog is loading', () => {
+      const deferred = createDeferred<CompareModel[]>();
+      fetchModelsSpy.mockReturnValue(deferred.promise);
 
-    // Brand & header actions
-    expect(screen.getByText('LLM Compare')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /скопировать ссылку/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /новое сравнение/i })).toBeInTheDocument();
-
-    // Models in header
-    for (const model of desktopModels) {
-      expect(screen.getByText(model.name)).toBeInTheDocument();
-    }
-
-    // Turns questions
-    for (const turn of desktopTurns) {
-      expect(screen.getByText(turn.question)).toBeInTheDocument();
-    }
-
-    // Add model button
-    expect(screen.getByRole('button', { name: 'Добавить модель' })).toBeInTheDocument();
-
-    // Prompt composer
-    const textarea = screen.getByRole('textbox', {
-      name: /задайте вопрос всем моделям/i,
-    });
-    expect(textarea).toHaveValue('');
-
-    const sendBtn = screen.getByRole('button', { name: /отправить вопрос/i });
-    expect(sendBtn).toBeDisabled();
-
-    // Initial status should be empty
-    const status = screen.getByRole('status');
-    expect(status.textContent).toBe('');
-  });
-
-  it('sends a new prompt, creates a new turn with answers for all current models, and clears input', async () => {
-    const user = userEvent.setup();
-    render(<ComparePage />);
-
-    const textarea = screen.getByRole('textbox', {
-      name: /задайте вопрос всем моделям/i,
-    });
-    const sendBtn = screen.getByRole('button', { name: /отправить вопрос/i });
-
-    await user.type(textarea, 'Привет, новый вопрос!');
-    expect(textarea).toHaveValue('Привет, новый вопрос!');
-    expect(sendBtn).toBeEnabled();
-
-    await user.click(sendBtn);
-
-    // Prompt value should be cleared
-    expect(textarea).toHaveValue('');
-
-    // Question should appear as a new turn
-    expect(screen.getByText('Привет, новый вопрос!', { selector: 'div' })).toBeInTheDocument();
-
-    // All active models should have answers generated
-    for (const model of desktopModels) {
-      expect(
-        screen.getByText(
-          (_content, element) =>
-            element?.tagName === 'P' &&
-            element?.textContent?.includes(`Демонстрационный ответ модели ${model.name}.`) === true,
-        ),
-      ).toBeInTheDocument();
-    }
-  });
-
-  it('rejects invalid or too long prompt without creating a turn and displays Russian error message', async () => {
-    const user = userEvent.setup();
-    render(<ComparePage />);
-
-    const textarea = screen.getByRole('textbox', {
-      name: /задайте вопрос всем моделям/i,
-    });
-
-    const tooLongPrompt = 'x'.repeat(10001);
-    fireEvent.change(textarea, { target: { value: tooLongPrompt } });
-    const sendBtn = screen.getByRole('button', { name: /отправить вопрос/i });
-    expect(sendBtn).toBeEnabled();
-
-    await user.click(sendBtn);
-
-    const error = screen.getByRole('alert');
-    expect(error).toHaveTextContent('10');
-    expect(textarea).toHaveAttribute('aria-invalid', 'true');
-    expect(textarea).toHaveAccessibleDescription(error.textContent ?? '');
-    expect(textarea).toHaveValue(tooLongPrompt);
-    expect(screen.queryByText(tooLongPrompt, { selector: 'div' })).toBeNull();
-    fireEvent.change(textarea, { target: { value: 'Исправленный вопрос' } });
-    expect(screen.queryByRole('alert')).toBeNull();
-    expect(textarea).not.toHaveAttribute('aria-invalid');
-  });
-
-  it('opens ModelPicker when add-model is clicked, adds model, closes picker, and renders new column with placeholder in past turns', async () => {
-    const user = userEvent.setup();
-    render(<ComparePage />);
-
-    const addBtn = screen.getByRole('button', { name: 'Добавить модель' });
-    await user.click(addBtn);
-
-    // Modal is open
-    expect(screen.getByRole('dialog')).toBeInTheDocument();
-    const searchInput = screen.getByRole('textbox', { name: 'Поиск модели' });
-    await user.type(searchInput, 'Демо Альфа');
-
-    const selectBtn = screen.getByText('Демо Альфа').closest('button');
-    expect(selectBtn).toBeEnabled();
-    if (selectBtn) {
-      await user.click(selectBtn);
-    }
-
-    // Modal closes
-    expect(screen.queryByRole('dialog')).toBeNull();
-
-    // Model is added to model bar
-    expect(screen.getByText('Демо Альфа')).toBeInTheDocument();
-
-    // Historical turns have missing placeholder for newly added model
-    expect(screen.getAllByText('Модель добавлена после этого вопроса.')).toHaveLength(2);
-  });
-
-  it('removes a model when remove button is clicked and disables remove when only 2 models remain', async () => {
-    const user = userEvent.setup();
-    render(<ComparePage />);
-
-    const removeClaudeBtn = screen.getByRole('button', {
-      name: /удалить модель claude haiku 5.5/i,
-    });
-    await user.click(removeClaudeBtn);
-
-    // Claude is gone
-    expect(screen.queryByText('Claude Haiku 5.5')).toBeNull();
-
-    // 2 models remain, their remove buttons are disabled
-    const disabledRemoveButtons = screen.getAllByRole('button', {
-      name: 'Нужно оставить минимум 2 модели',
-    });
-    expect(disabledRemoveButtons).toHaveLength(2);
-    expect(disabledRemoveButtons[0]).toBeDisabled();
-    expect(disabledRemoveButtons[1]).toBeDisabled();
-  });
-
-  it('retries error answer when retry is clicked and replaces it with mock success answer', async () => {
-    const user = userEvent.setup();
-    render(<ComparePage />);
-
-    const gigaCell = screen.getByLabelText('GigaChat 2, turn-1');
-    expect(within(gigaCell).getByText('Модель не ответила за 60 секунд')).toBeInTheDocument();
-
-    const retryBtn = within(gigaCell).getByRole('button', {
-      name: /повторить/i,
-    });
-    await user.click(retryBtn);
-
-    // Error is gone, success answer is rendered
-    expect(within(gigaCell).queryByText('Модель не ответила за 60 секунд')).toBeNull();
-    expect(
-      within(gigaCell).getByText(
-        (_content, element) =>
-          element?.tagName === 'P' &&
-          element?.textContent?.includes('Демонстрационный ответ модели GigaChat 2.') === true,
-      ),
-    ).toBeInTheDocument();
-  });
-
-  it('starts new comparison: resets turns to empty, clears prompt, preserves models, and shows empty state', async () => {
-    const user = userEvent.setup();
-    render(<ComparePage />);
-
-    const newBtn = screen.getByRole('button', {
-      name: /новое сравнение/i,
-    });
-    await user.click(newBtn);
-
-    // Empty state message is shown
-    expect(screen.getByText('Задайте вопрос, чтобы начать сравнение.')).toBeInTheDocument();
-
-    // Models still remain in header
-    for (const model of desktopModels) {
-      expect(screen.getByText(model.name)).toBeInTheDocument();
-    }
-  });
-
-  it('sends a prompt after new comparison and renders the first turn', async () => {
-    const user = userEvent.setup();
-    render(<ComparePage />);
-
-    const newBtn = screen.getByRole('button', {
-      name: /новое сравнение/i,
-    });
-    await user.click(newBtn);
-
-    const textarea = screen.getByRole('textbox', {
-      name: /задайте вопрос всем моделям/i,
-    });
-    await user.type(textarea, 'Вопрос после очистки');
-    const sendBtn = screen.getByRole('button', { name: /отправить вопрос/i });
-    await user.click(sendBtn);
-
-    expect(screen.queryByText('Задайте вопрос, чтобы начать сравнение.')).toBeNull();
-    expect(screen.getByText('Вопрос после очистки', { selector: 'div' })).toBeInTheDocument();
-  });
-
-  it('shows unsupported message for Share button without modifying data or touching clipboard', async () => {
-    const user = userEvent.setup();
-    render(<ComparePage />);
-
-    const shareBtn = screen.getByRole('button', {
-      name: /скопировать ссылку/i,
-    });
-    await user.click(shareBtn);
-
-    const status = screen.getByRole('status');
-    expect(status).toHaveTextContent('Общий доступ пока не поддерживается.');
-  });
-
-  it('does not close an open thought block in another answer when retry is clicked', async () => {
-    const user = userEvent.setup();
-    render(<ComparePage />);
-
-    const claudeCell = screen.getByLabelText('Claude Haiku 5.5, turn-1');
-    const thoughtBtn = within(claudeCell).getByRole('button', { name: 'Думала 4 секунды' });
-
-    // Open thought block
-    await user.click(thoughtBtn);
-    expect(thoughtBtn).toHaveAttribute('aria-expanded', 'true');
-    expect(
-      within(claudeCell).getByText(/Пользователь спрашивает об Editor\.js/),
-    ).toBeInTheDocument();
-
-    // Now click retry on GigaChat in the same turn
-    const gigaCell = screen.getByLabelText('GigaChat 2, turn-1');
-    const retryBtn = within(gigaCell).getByRole('button', {
-      name: /повторить/i,
-    });
-    await user.click(retryBtn);
-
-    // Verify Claude's thought block is still expanded!
-    expect(thoughtBtn).toHaveAttribute('aria-expanded', 'true');
-    expect(
-      within(claudeCell).getByText(/Пользователь спрашивает об Editor\.js/),
-    ).toBeInTheDocument();
-  });
-
-  describe('TASK-010: Integration action flows', () => {
-    it('executes flow: Remove -> search -> add different model -> Send new prompt', async () => {
-      const user = userEvent.setup();
       render(<ComparePage />);
 
-      // 1. Remove Yandex
-      const removeYandexBtn = screen.getByRole('button', {
-        name: /удалить модель yandexgpt 5 lite/i,
+      const loadingBanner = screen.getByText('Загружаем модели…');
+      expect(loadingBanner).toBeInTheDocument();
+      expect(loadingBanner).toHaveAttribute('role', 'status');
+      expect(screen.getByRole('textbox')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /отправить вопрос/i })).toBeDisabled();
+      expect(screen.queryByTestId('model-picker')).toBeNull();
+    });
+
+    it('displays error banner and retry button when catalog loading fails, and retrying succeeds', async () => {
+      const user = userEvent.setup();
+      let attempt = 0;
+      fetchModelsSpy.mockImplementation(() => {
+        attempt++;
+        if (attempt === 1) {
+          return Promise.reject(new comparisonApi.ComparisonApiError('NETWORK_ERROR'));
+        }
+        return Promise.resolve(testCatalog);
       });
-      await user.click(removeYandexBtn);
-      expect(screen.queryByText('YandexGPT 5 Lite')).toBeNull();
 
-      // 2. Open picker, search for Demo Alpha, and add it
-      const addBtn = screen.getByRole('button', { name: 'Добавить модель' });
-      await user.click(addBtn);
+      render(<ComparePage />);
 
-      const searchInput = screen.getByRole('textbox', { name: 'Поиск модели' });
-      await user.type(searchInput, 'демо альфа');
-      const demoAlphaBtn = screen.getByText('Демо Альфа').closest('button');
-      expect(demoAlphaBtn).toBeEnabled();
-      if (demoAlphaBtn) {
-        await user.click(demoAlphaBtn);
-      }
+      const alert = await screen.findByRole('alert');
+      expect(alert).toHaveTextContent('Не удалось загрузить модели.');
 
-      // Verify models in header: Claude, Giga, Demo Alpha
-      expect(screen.getByText('Claude Haiku 5.5')).toBeInTheDocument();
-      expect(screen.getByText('GigaChat 2')).toBeInTheDocument();
-      expect(screen.getByText('Демо Альфа')).toBeInTheDocument();
+      const retryBtn = screen.getByRole('button', { name: 'Повторить загрузку' });
+      await user.click(retryBtn);
 
-      // 3. Send new question
-      const textarea = screen.getByRole('textbox', {
-        name: /задайте вопрос всем моделям/i,
+      await screen.findByText('Model One');
+      expect(screen.queryByRole('alert')).toBeNull();
+      expect(screen.getByText('Model Two')).toBeInTheDocument();
+      expect(screen.getByText('Model Three')).toBeInTheDocument();
+    });
+
+    it('displays empty catalog message when catalog returns 0 models', async () => {
+      fetchModelsSpy.mockResolvedValue([]);
+
+      render(<ComparePage />);
+
+      const emptyMsg = await screen.findByText('Нет доступных моделей.');
+      expect(emptyMsg).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /отправить вопрос/i })).toBeDisabled();
+    });
+
+    it('displays 1 model header with warning when catalog returns exactly 1 model', async () => {
+      fetchModelsSpy.mockResolvedValue([testCatalog[0]]);
+
+      render(<ComparePage />);
+
+      await screen.findByText('Model One');
+      expect(screen.getByText('Для сравнения нужны минимум две модели.')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /отправить вопрос/i })).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Добавить модель' })).toBeDisabled();
+    });
+
+    it('initializes with first 3 models when catalog has >= 3 models', async () => {
+      fetchModelsSpy.mockResolvedValue(testCatalog);
+
+      render(<ComparePage />);
+
+      await screen.findByText('Model One');
+      expect(screen.getByText('Model Two')).toBeInTheDocument();
+      expect(screen.getByText('Model Three')).toBeInTheDocument();
+      expect(screen.queryByText('Model Four')).toBeNull();
+    });
+  });
+
+  describe('Prompt sending and generation orchestration', () => {
+    it('dispatches concurrent generation calls for all 3 models, renders waiting states, and resolves out-of-order', async () => {
+      const user = userEvent.setup();
+      fetchModelsSpy.mockResolvedValue(testCatalog);
+
+      const deferred1 = createDeferred<comparisonApi.GenerateResponse>();
+      const deferred2 = createDeferred<comparisonApi.GenerateResponse>();
+      const deferred3 = createDeferred<comparisonApi.GenerateResponse>();
+
+      generateAnswerSpy.mockImplementation(({ modelId }: { modelId: string }) => {
+        if (modelId === 'test/model-1') return deferred1.promise;
+        if (modelId === 'test/model-2') return deferred2.promise;
+        if (modelId === 'test/model-3') return deferred3.promise;
+        return Promise.reject(new Error('Unexpected model'));
       });
-      await user.type(textarea, 'Интеграционный вопрос');
+
+      render(<ComparePage />);
+      await screen.findByText('Model One');
+
+      const textarea = screen.getByRole('textbox');
       const sendBtn = screen.getByRole('button', { name: /отправить вопрос/i });
+
+      await user.type(textarea, 'Какая погода?');
       await user.click(sendBtn);
 
-      // Verify 3 turns exist
-      expect(screen.getByText('Интеграционный вопрос', { selector: 'div' })).toBeInTheDocument();
+      // Verify prompt is cleared
+      expect(textarea).toHaveValue('');
 
-      // Turn 1 and 2 have placeholder for Demo Alpha
-      expect(screen.getAllByText('Модель добавлена после этого вопроса.')).toHaveLength(2);
+      // Verify all 3 generation calls were made concurrently before any resolved
+      expect(generateAnswerSpy).toHaveBeenCalledTimes(3);
+      expect(generateAnswerSpy).toHaveBeenCalledWith(
+        { prompt: 'Какая погода?', modelId: 'test/model-1' },
+        expect.any(AbortSignal),
+      );
+      expect(generateAnswerSpy).toHaveBeenCalledWith(
+        { prompt: 'Какая погода?', modelId: 'test/model-2' },
+        expect.any(AbortSignal),
+      );
+      expect(generateAnswerSpy).toHaveBeenCalledWith(
+        { prompt: 'Какая погода?', modelId: 'test/model-3' },
+        expect.any(AbortSignal),
+      );
 
-      // Turn 3 has success answer for Demo Alpha
-      expect(
-        screen.getByText(
-          (_content, el) =>
-            el?.tagName === 'P' &&
-            el?.textContent?.includes('Демонстрационный ответ модели Демо Альфа.') === true,
-        ),
-      ).toBeInTheDocument();
-    });
+      // Verify pending status in all 3 cells
+      const waitingStatuses = screen.getAllByRole('status');
+      expect(waitingStatuses.some((s) => s.textContent?.includes('Ждём ответ…'))).toBe(true);
 
-    it('proves that removing and re-adding a model does not resurrect its historical answers', async () => {
-      const user = userEvent.setup();
-      render(<ComparePage />);
-
-      // Remove Claude
-      const removeClaudeBtn = screen.getByRole('button', {
-        name: /удалить модель claude haiku 5.5/i,
+      // Resolve Model 3 first (out of order!)
+      await act(async () => {
+        deferred3.resolve({
+          modelId: 'test/model-3',
+          text: 'Ответ от Model Three',
+          durationMs: 1500,
+        });
       });
-      await user.click(removeClaudeBtn);
-      expect(screen.queryByText('Claude Haiku 5.5')).toBeNull();
 
-      // Re-add Claude from catalog
-      const addBtn = screen.getByRole('button', { name: 'Добавить модель' });
-      await user.click(addBtn);
-      const claudeOption = screen.getByText('Claude Haiku 5.5').closest('button');
-      expect(claudeOption).toBeEnabled();
-      if (claudeOption) {
-        await user.click(claudeOption);
-      }
+      expect(screen.getByText('Ответ от Model Three')).toBeInTheDocument();
+      expect(screen.getByText('1,5 с')).toBeInTheDocument();
 
-      // Claude is present in header
-      expect(screen.getByText('Claude Haiku 5.5')).toBeInTheDocument();
+      // Resolve Model 1 second
+      await act(async () => {
+        deferred1.resolve({
+          modelId: 'test/model-1',
+          text: 'Ответ от Model One',
+          durationMs: 2200,
+        });
+      });
+      expect(screen.getByText('Ответ от Model One')).toBeInTheDocument();
+      expect(screen.getByText('2,2 с')).toBeInTheDocument();
 
-      // But Claude's answers in past turns are NOT resurrected, they show placeholder
-      expect(screen.getAllByText('Модель добавлена после этого вопроса.')).toHaveLength(2);
+      // Model 2 errors
+      await act(async () => {
+        deferred2.reject(new comparisonApi.ComparisonApiError('UPSTREAM_LIMIT_EXCEEDED'));
+      });
+
+      expect(screen.getByText('Лимит запросов исчерпан.')).toBeInTheDocument();
+      expect(screen.getByText('Повторите запрос позже.')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /повторить/i })).toBeInTheDocument();
     });
 
-    it('enforces boundary limits: maximum 4 models cannot add 5th, minimum 2 models cannot delete further', async () => {
+    it('allows sending a second prompt while earlier turn is still pending', async () => {
       const user = userEvent.setup();
-      render(<ComparePage />);
+      fetchModelsSpy.mockResolvedValue(testCatalog.slice(0, 2));
 
-      // Add 4th model (demo-alpha)
+      const deferredTurn1 = createDeferred<comparisonApi.GenerateResponse>();
+      const deferredTurn2 = createDeferred<comparisonApi.GenerateResponse>();
+
+      let callCount = 0;
+      generateAnswerSpy.mockImplementation(() => {
+        callCount++;
+        return callCount <= 2 ? deferredTurn1.promise : deferredTurn2.promise;
+      });
+
+      render(<ComparePage />);
+      await screen.findByText('Model One');
+
+      const textarea = screen.getByRole('textbox');
+      const sendBtn = screen.getByRole('button', { name: /отправить вопрос/i });
+
+      // First question
+      await user.type(textarea, 'Вопрос 1');
+      await user.click(sendBtn);
+
+      expect(generateAnswerSpy).toHaveBeenCalledTimes(2);
+      expect(screen.getByText('Вопрос 1')).toBeInTheDocument();
+
+      // Second question while first is pending
+      await user.type(textarea, 'Вопрос 2');
+      await user.click(sendBtn);
+
+      expect(generateAnswerSpy).toHaveBeenCalledTimes(4);
+      expect(screen.getByText('Вопрос 1')).toBeInTheDocument();
+      expect(screen.getByText('Вопрос 2')).toBeInTheDocument();
+    });
+  });
+
+  describe('Retry functionality', () => {
+    it('retries only the errored cell using the turn question and guards against double-click', async () => {
+      const user = userEvent.setup();
+      fetchModelsSpy.mockResolvedValue(testCatalog.slice(0, 2));
+
+      let callIndex = 0;
+      const retryDeferred = createDeferred<comparisonApi.GenerateResponse>();
+
+      generateAnswerSpy.mockImplementation(({ modelId }: { modelId: string }) => {
+        callIndex++;
+        if (callIndex === 1) {
+          return Promise.resolve({
+            modelId,
+            text: 'Good answer M1',
+            durationMs: 1000,
+          });
+        }
+        if (callIndex === 2) {
+          return Promise.reject(new comparisonApi.ComparisonApiError('UPSTREAM_TIMEOUT'));
+        }
+        // Retry call
+        return retryDeferred.promise;
+      });
+
+      render(<ComparePage />);
+      await screen.findByText('Model One');
+
+      const textarea = screen.getByRole('textbox');
+      await user.type(textarea, 'Исторический вопрос');
+      await user.click(screen.getByRole('button', { name: /отправить вопрос/i }));
+
+      // Wait for M1 success and M2 error
+      await screen.findByText('Good answer M1');
+      await screen.findByText('Время ожидания истекло.');
+
+      const retryBtn = screen.getByRole('button', { name: /повторить/i });
+      expect(generateAnswerSpy).toHaveBeenCalledTimes(2);
+
+      // Rapidly double click retry
+      await user.click(retryBtn);
+      await user.click(retryBtn);
+
+      // Only 1 additional call made due to in-flight synchronous guard!
+      expect(generateAnswerSpy).toHaveBeenCalledTimes(3);
+      expect(generateAnswerSpy).toHaveBeenLastCalledWith(
+        { prompt: 'Исторический вопрос', modelId: 'test/model-2' },
+        expect.any(AbortSignal),
+      );
+
+      // Resolve retry
+      await act(async () => {
+        retryDeferred.resolve({
+          modelId: 'test/model-2',
+          text: 'Successful retry answer M2',
+          durationMs: 1800,
+        });
+      });
+
+      expect(await screen.findByText('Successful retry answer M2')).toBeInTheDocument();
+      expect(screen.getByText('Good answer M1')).toBeInTheDocument();
+    });
+  });
+
+  describe('TopBar and Model modifications', () => {
+    it('clears all turns and aborts in-flight requests on new-comparison', async () => {
+      const user = userEvent.setup();
+      fetchModelsSpy.mockResolvedValue(testCatalog.slice(0, 2));
+
+      let capturedSignal: AbortSignal | undefined;
+      const deferred = createDeferred<comparisonApi.GenerateResponse>();
+
+      generateAnswerSpy.mockImplementation((_input: unknown, signal?: AbortSignal) => {
+        capturedSignal = signal;
+        return deferred.promise;
+      });
+
+      render(<ComparePage />);
+      await screen.findByText('Model One');
+
+      await user.type(screen.getByRole('textbox'), 'Вопрос для очистки');
+      await user.click(screen.getByRole('button', { name: /отправить вопрос/i }));
+
+      expect(screen.getByText('Вопрос для очистки')).toBeInTheDocument();
+      expect(capturedSignal?.aborted).toBe(false);
+
+      // Click new comparison
+      const newBtn = screen.getByRole('button', { name: /новое сравнение/i });
+      await user.click(newBtn);
+
+      expect(screen.queryByText('Вопрос для очистки')).toBeNull();
+      expect(capturedSignal?.aborted).toBe(true);
+
+      // Late resolve does not resurrect answer
+      await act(async () => {
+        deferred.resolve({
+          modelId: 'test/model-1',
+          text: 'Ghost answer',
+          durationMs: 1000,
+        });
+      });
+
+      expect(screen.queryByText('Ghost answer')).toBeNull();
+    });
+
+    it('adds a 4th model via ModelPicker, disables Add button when 4 models reached, and preserves focus', async () => {
+      const user = userEvent.setup();
+      fetchModelsSpy.mockResolvedValue(testCatalog);
+
+      render(<ComparePage />);
+      await screen.findByText('Model One');
+
       const addBtn = screen.getByRole('button', { name: 'Добавить модель' });
       await user.click(addBtn);
-      const alphaBtn = screen.getByText('Демо Альфа').closest('button');
-      if (alphaBtn) await user.click(alphaBtn);
 
-      // Re-open picker: all remaining unselected models must be disabled with 4-model limit message
-      await user.click(addBtn);
-      expect(screen.getAllByText('Можно выбрать не более 4 моделей').length).toBeGreaterThan(0);
-      const closeBtn = screen.getByRole('button', { name: 'Закрыть' });
-      await user.click(closeBtn);
+      // Modal is open with remaining models in catalog
+      const dialog = screen.getByRole('dialog', { name: 'Добавить модель' });
+      expect(dialog).toBeInTheDocument();
 
-      // Now remove 2 models so only 2 remain
-      const removeClaude = screen.getByRole('button', { name: /удалить модель claude/i });
-      await user.click(removeClaude);
-      const removeYandex = screen.getByRole('button', { name: /удалить модель yandex/i });
-      await user.click(removeYandex);
+      const model4Btn = within(dialog).getByRole('button', { name: /Model Four/ });
+      await user.click(model4Btn);
 
-      // Only 2 models remain (GigaChat and Demo Alpha)
+      // Model 4 added to header
+      expect(await screen.findByText('Model Four')).toBeInTheDocument();
+
+      // Now 4 models are active -> Add button is disabled
+      expect(screen.getByRole('button', { name: 'Добавить модель' })).toBeDisabled();
+      expect(screen.getByRole('textbox')).toHaveFocus();
+    });
+
+    it('removes a model down to minimum 2, aborting any active requests for that model', async () => {
+      const user = userEvent.setup();
+      fetchModelsSpy.mockResolvedValue([
+        testCatalog[0],
+        testCatalog[1],
+        { ...testCatalog[2], id: 'test/model:variant' },
+      ]);
+
+      let m3Signal: AbortSignal | undefined;
+      const lateModel = createDeferred<comparisonApi.GenerateResponse>();
+      generateAnswerSpy.mockImplementation(
+        ({ modelId }: { modelId: string }, signal?: AbortSignal) => {
+          if (modelId === 'test/model:variant') {
+            m3Signal = signal;
+            return lateModel.promise;
+          }
+          return createDeferred<comparisonApi.GenerateResponse>().promise;
+        },
+      );
+
+      render(<ComparePage />);
+      await screen.findByText('Model One');
+
+      await user.type(screen.getByRole('textbox'), 'Тест удаления');
+      await user.click(screen.getByRole('button', { name: /отправить вопрос/i }));
+
+      expect(screen.getByText('Model Three')).toBeInTheDocument();
+
+      // Remove Model Three
+      const removeBtn = screen.getByRole('button', { name: 'Удалить модель Model Three' });
+      await user.click(removeBtn);
+
+      expect(screen.queryByText('Model Three')).toBeNull();
+      expect(m3Signal?.aborted).toBe(true);
+      await user.click(screen.getByRole('button', { name: 'Добавить модель' }));
+      await user.click(
+        within(screen.getByRole('dialog')).getByRole('button', { name: /Model Three/ }),
+      );
+      await act(async () => {
+        lateModel.resolve({
+          modelId: 'test/model:variant',
+          text: 'Ghost removed model',
+          durationMs: 1,
+        });
+      });
+      expect(screen.queryByText('Ghost removed model')).toBeNull();
+      expect(screen.getByText('Модель добавлена после этого вопроса.')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Удалить модель Model Three' }));
+
+      // Minimum 2 models remaining: remove buttons for M1 and M2 are disabled
       const disabledRemoveButtons = screen.getAllByRole('button', {
         name: 'Нужно оставить минимум 2 модели',
       });
       expect(disabledRemoveButtons).toHaveLength(2);
-      expect(disabledRemoveButtons[0]).toBeDisabled();
-      expect(disabledRemoveButtons[1]).toBeDisabled();
+      for (const btn of disabledRemoveButtons) {
+        expect(btn).toBeDisabled();
+      }
     });
+
+    it('displays status message when Share is clicked', async () => {
+      const user = userEvent.setup();
+      fetchModelsSpy.mockResolvedValue(testCatalog.slice(0, 2));
+
+      render(<ComparePage />);
+      await screen.findByText('Model One');
+
+      const shareBtn = screen.getByRole('button', { name: /скопировать ссылку/i });
+      await user.click(shareBtn);
+
+      expect(screen.getByText('Общий доступ пока не поддерживается.')).toBeInTheDocument();
+    });
+  });
+  it('aborts every generation on unmount and ignores their late results', async () => {
+    const user = userEvent.setup();
+    fetchModelsSpy.mockResolvedValue(testCatalog.slice(0, 2));
+    const signals: AbortSignal[] = [];
+    const deferred = createDeferred<comparisonApi.GenerateResponse>();
+    generateAnswerSpy.mockImplementation((_input: unknown, signal: AbortSignal) => {
+      signals.push(signal);
+      return deferred.promise;
+    });
+    const view = render(<ComparePage />);
+    await screen.findByText('Model One');
+    await user.type(screen.getByRole('textbox'), 'Unmount test');
+    await user.click(screen.getByRole('button', { name: /отправить вопрос/i }));
+    expect(signals).toHaveLength(2);
+    view.unmount();
+    expect(signals.every((signal) => signal.aborted)).toBe(true);
+    await act(async () => {
+      deferred.resolve({ modelId: 'test/model-1', text: 'Late unmounted', durationMs: 0 });
+    });
+    expect(screen.queryByText('Late unmounted')).toBeNull();
   });
 });

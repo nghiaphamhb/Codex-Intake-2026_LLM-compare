@@ -41,6 +41,34 @@ describe('AnswerCell', () => {
     expect(screen.getByText('2,1 с · $0,0021')).toBeInTheDocument();
   });
 
+  it('renders success state without separator when costLabel is undefined', () => {
+    const successWithoutCost: ResultAnswer = {
+      state: 'success',
+      markdown: 'Answer without cost',
+      durationLabel: '1,5 с',
+    };
+
+    render(
+      <AnswerCell model={model} turnId="turn-1" answer={successWithoutCost} onRetry={vi.fn()} />,
+    );
+
+    expect(screen.getByText('1,5 с')).toBeInTheDocument();
+    expect(screen.queryByText(/·/)).toBeNull();
+  });
+
+  it('renders pending state using AnswerStatus waiting', () => {
+    const pendingAnswer: ResultAnswer = {
+      state: 'pending',
+      requestId: 'req-1',
+    };
+
+    render(<AnswerCell model={model} turnId="turn-1" answer={pendingAnswer} onRetry={vi.fn()} />);
+
+    expect(screen.getByRole('status')).toBeInTheDocument();
+    expect(screen.getByText('Ждём ответ…')).toBeInTheDocument();
+    expect(screen.getAllByTestId('skeleton-line')).toHaveLength(3);
+  });
+
   it('renders error state with AnswerError and calls onRetry when clicked', async () => {
     const user = userEvent.setup();
     const onRetry = vi.fn();
