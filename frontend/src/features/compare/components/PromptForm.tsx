@@ -13,6 +13,7 @@ export type PromptFormProps = {
   value: string;
   onValueChange: (value: string) => void;
   busy: boolean;
+  disabled?: boolean;
   onSend: (prompt: string) => void;
   onStop: () => void;
   inputRef?: RefObject<HTMLTextAreaElement | null>;
@@ -23,6 +24,7 @@ export function PromptForm({
   value,
   onValueChange,
   busy,
+  disabled = false,
   onSend,
   onStop,
   inputRef,
@@ -68,7 +70,7 @@ export function PromptForm({
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    if (busy) return;
+    if (busy || disabled) return;
     if (value.trim().length === 0) return;
     onSend(value);
   };
@@ -86,14 +88,14 @@ export function PromptForm({
 
       e.preventDefault();
 
-      if (busy) return;
+      if (busy || disabled) return;
       if (value.trim().length === 0) return;
 
       onSend(value);
     }
   };
 
-  const isSendDisabled = value.trim().length === 0;
+  const isSendDisabled = disabled || value.trim().length === 0;
 
   return (
     <>

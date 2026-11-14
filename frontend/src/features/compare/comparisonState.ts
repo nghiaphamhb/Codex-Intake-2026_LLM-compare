@@ -1,36 +1,31 @@
-import { desktopModels, desktopTurns } from './desktopFixtures';
-import { createMockAnswer, mockModelCatalog } from './mockComparison';
-import type { CompareModel, CompareTurn, ResultAnswer } from './types';
+import type { CompareModel, CompareTurn, ResultAnswer } from './types.js';
 
 export type ComparisonState = {
+  catalog: readonly CompareModel[];
   models: readonly CompareModel[];
   turns: readonly CompareTurn[];
 };
 
 export type ComparisonStateAction =
-  | { type: 'send'; turnId: string; prompt: string }
+  | { type: 'catalog-loaded'; catalog: CompareModel[] }
+  | { type: 'send'; turnId: string; prompt: string; requests: Record<string, string> }
+  | { type: 'retry'; turnId: string; modelId: string; requestId: string }
+  | {
+      type: 'resolve';
+      turnId: string;
+      modelId: string;
+      requestId: string;
+      answer: Exclude<ResultAnswer, { state: 'pending' }>;
+    }
   | { type: 'select-model'; modelId: string }
   | { type: 'remove-model'; modelId: string }
-  | { type: 'retry'; turnId: string; modelId: string }
   | { type: 'new-comparison' };
 
 export function createInitialComparisonState(): ComparisonState {
   return {
-    models: desktopModels.map((model) => ({ ...model })),
-    turns: desktopTurns.map((turn) => ({
-      ...turn,
-      answers: Object.fromEntries(
-        Object.entries(turn.answers).map(([key, ans]) => [
-          key,
-          ans
-            ? {
-                ...ans,
-                ...(ans.state === 'success' && ans.thought ? { thought: { ...ans.thought } } : {}),
-              }
-            : undefined,
-        ]),
-      ),
-    })),
+    catalog: [],
+    models: [],
+    turns: [],
   };
 }
 
@@ -52,8 +47,21 @@ export function comparisonReducer(
   action: ComparisonStateAction,
 ): ComparisonState {
   switch (action.type) {
+    case 'catalog-loaded': {
+      const nextCatalog = action.catalog.map((m) => ({ ...m }));
+      return {
+        ...state,
+        catalog: nextCatalog,
+        models: state.turns.length === 0 ? nextCatalog.slice(0, 3) : state.models,
+      };
+    }
+
     case 'send': {
       if (validatePrompt(action.prompt) !== null) {
+        return state;
+      }
+
+      if (state.models.length < 2 || state.models.length > 4) {
         return state;
       }
 
@@ -61,9 +69,22 @@ export function comparisonReducer(
         return state;
       }
 
+      if (Object.keys(action.requests).length !== state.models.length) return state;
+      const seenRequestIds = new Set<string>();
+      for (const model of state.models) {
+        const reqId = action.requests[model.id];
+        if (typeof reqId !== 'string' || reqId.trim() === '' || seenRequestIds.has(reqId)) {
+          return state;
+        }
+        seenRequestIds.add(reqId);
+      }
+
       const answers: Record<string, ResultAnswer> = {};
       for (const model of state.models) {
-        answers[model.id] = createMockAnswer(model);
+        answers[model.id] = {
+          state: 'pending',
+          requestId: action.requests[model.id],
+        };
       }
 
       const newTurn: CompareTurn = {
@@ -78,6 +99,94 @@ export function comparisonReducer(
       };
     }
 
+    case 'retry': {
+      if (
+        !action.requestId ||
+        typeof action.requestId !== 'string' ||
+        action.requestId.trim() === ''
+      ) {
+        return state;
+      }
+
+      if (!state.models.some((model) => model.id === action.modelId)) {
+        return state;
+      }
+
+      const turnIndex = state.turns.findIndex((turn) => turn.id === action.turnId);
+      if (turnIndex === -1) {
+        return state;
+      }
+
+      const targetTurn = state.turns[turnIndex];
+      const targetAnswer = targetTurn.answers[action.modelId];
+      if (!targetAnswer || targetAnswer.state !== 'error') {
+        return state;
+      }
+
+      const updatedAnswers: Record<string, ResultAnswer | undefined> = {
+        ...targetTurn.answers,
+        [action.modelId]: {
+          state: 'pending',
+          requestId: action.requestId,
+        },
+      };
+
+      const updatedTurn: CompareTurn = {
+        ...targetTurn,
+        answers: updatedAnswers,
+      };
+
+      const nextTurns = [...state.turns];
+      nextTurns[turnIndex] = updatedTurn;
+
+      return {
+        ...state,
+        turns: nextTurns,
+      };
+    }
+
+    case 'resolve': {
+      if (!state.models.some((model) => model.id === action.modelId)) {
+        return state;
+      }
+
+      const turnIndex = state.turns.findIndex((turn) => turn.id === action.turnId);
+      if (turnIndex === -1) {
+        return state;
+      }
+
+      const targetTurn = state.turns[turnIndex];
+      const targetAnswer = targetTurn.answers[action.modelId];
+      if (
+        !targetAnswer ||
+        targetAnswer.state !== 'pending' ||
+        targetAnswer.requestId !== action.requestId
+      ) {
+        return state;
+      }
+
+      const updatedAnswers: Record<string, ResultAnswer | undefined> = {
+        ...targetTurn.answers,
+        [action.modelId]: {
+          ...action.answer,
+          requestId: action.requestId,
+        },
+      };
+
+      const updatedTurn: CompareTurn = {
+        ...targetTurn,
+        answers: updatedAnswers,
+      };
+
+      const nextTurns = [...state.turns];
+      nextTurns[turnIndex] = updatedTurn;
+
+      return {
+        ...state,
+        turns: nextTurns,
+      };
+    }
+
     case 'select-model': {
       if (state.models.length >= 4) {
         return state;
@@ -87,7 +196,7 @@ export function comparisonReducer(
         return state;
       }
 
-      const modelToAdd = mockModelCatalog.find((model) => model.id === action.modelId);
+      const modelToAdd = state.catalog.find((model) => model.id === action.modelId);
       if (!modelToAdd) {
         return state;
       }
@@ -119,42 +228,6 @@ export function comparisonReducer(
       return {
         ...state,
         models: nextModels,
-        turns: nextTurns,
-      };
-    }
-
-    case 'retry': {
-      const targetModel = state.models.find((model) => model.id === action.modelId);
-      if (!targetModel) {
-        return state;
-      }
-
-      const turnIndex = state.turns.findIndex((turn) => turn.id === action.turnId);
-      if (turnIndex === -1) {
-        return state;
-      }
-
-      const targetTurn = state.turns[turnIndex];
-      const targetAnswer = targetTurn.answers[action.modelId];
-      if (!targetAnswer || targetAnswer.state !== 'error') {
-        return state;
-      }
-
-      const updatedAnswers = {
-        ...targetTurn.answers,
-        [action.modelId]: createMockAnswer(targetModel),
-      };
-
-      const updatedTurn: CompareTurn = {
-        ...targetTurn,
-        answers: updatedAnswers,
-      };
-
-      const nextTurns = [...state.turns];
-      nextTurns[turnIndex] = updatedTurn;
-
-      return {
-        ...state,
         turns: nextTurns,
       };
     }

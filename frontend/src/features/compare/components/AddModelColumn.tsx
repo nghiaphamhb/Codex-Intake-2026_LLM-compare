@@ -3,16 +3,18 @@ import styles from './AddModelColumn.module.css';
 
 export type AddModelColumnProps = {
   onAdd: () => void;
+  disabled?: boolean;
 };
 
 export const AddModelColumn = forwardRef<HTMLButtonElement, AddModelColumnProps>(
-  function AddModelColumn({ onAdd }, ref) {
+  function AddModelColumn({ onAdd, disabled = false }, ref) {
     return (
       <button
         ref={ref}
         type="button"
         className={styles.column}
         onClick={onAdd}
+        disabled={disabled}
         aria-label="Добавить модель"
       >
         <div className={styles.iconCircle} aria-hidden="true">

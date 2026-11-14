@@ -5,19 +5,27 @@ import { AnswerError } from './AnswerError';
 
 describe('AnswerError', () => {
   it('renders warning icon, error message, and optional description', () => {
-    render(
+    const { container } = render(
       <AnswerError
         message="Ошибка генерации"
         description="Превышен лимит запросов к модели."
         onRetry={() => {}}
-      />
+      />,
     );
 
     expect(screen.getByText('Ошибка генерации')).toBeInTheDocument();
     expect(screen.getByText('Превышен лимит запросов к модели.')).toBeInTheDocument();
 
-    const icon = screen.getByAltText('');
-    expect(icon).toHaveAttribute('src', '/assets/icons/alert.svg');
+    expect(container.querySelectorAll('img, use, image')).toHaveLength(0);
+    const icons = container.querySelectorAll('svg');
+    expect(icons).toHaveLength(2);
+    expect(icons[0]).toHaveAttribute('viewBox', '0 0 20 20');
+    expect(icons[1]).toHaveAttribute('viewBox', '0 0 16 16');
+    for (const icon of icons) {
+      expect(icon).toHaveAttribute('aria-hidden', 'true');
+      expect(icon).toHaveAttribute('focusable', 'false');
+      expect(icon.querySelector('path')).not.toBeNull();
+    }
   });
 
   it('renders "Повторить" button and calls onRetry callback when clicked', async () => {
@@ -46,4 +54,3 @@ describe('AnswerError', () => {
     expect(handleRetry).not.toHaveBeenCalled();
   });
 });
-

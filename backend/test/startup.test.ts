@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, type ChildProcess } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -11,7 +11,14 @@ import { startUpstream } from './helpers/upstream.js';
 
 const require = createRequire(import.meta.url);
 const tsxLoaderUrl = pathToFileURL(require.resolve('tsx')).href;
-const absoluteServerPath = resolve('src/server.ts');
+function createStartupFixture(prefix: string): string {
+  const root = mkdtempSync(join(tmpdir(), prefix));
+  mkdirSync(join(root, 'backend'));
+  cpSync(resolve('src'), join(root, 'backend/src'), { recursive: true });
+  writeFileSync(join(root, 'backend/package.json'), '{"type":"module"}');
+  symlinkSync(resolve('node_modules'), join(root, 'backend/node_modules'), 'junction');
+  return root;
+}
 
 async function getFreePort(): Promise<number> {
   return new Promise((res, rej) => {
@@ -99,7 +106,7 @@ async function waitForHealth(
 }
 
 test('startup exits with code 1 when required config is missing before calling upstream', async (t) => {
-  const tempDir = mkdtempSync(join(tmpdir(), 'startup-test-missing-'));
+  const tempDir = createStartupFixture('startup-test-missing-');
   let upstreamCalls = 0;
   const stub = await startUpstream((_req, res) => {
     upstreamCalls += 1;
@@ -114,13 +121,17 @@ test('startup exits with code 1 when required config is missing before calling u
   let child: ChildProcess | undefined;
 
   try {
-    child = spawn(process.execPath, ['--import', tsxLoaderUrl, absoluteServerPath], {
-      cwd: tempDir,
-      env: getSanitizedEnv({
-        LLM_BASE_URL: stub.baseUrl,
-        // LLM_API_KEY is intentionally missing
-      }),
-    });
+    child = spawn(
+      process.execPath,
+      ['--import', tsxLoaderUrl, join(tempDir, 'backend/src/server.ts')],
+      {
+        cwd: tempDir,
+        env: getSanitizedEnv({
+          LLM_BASE_URL: stub.baseUrl,
+          // LLM_API_KEY is intentionally missing
+        }),
+      },
+    );
 
     child.stdout?.on('data', (d) => {
       stdout += d.toString();
@@ -142,8 +153,8 @@ test('startup exits with code 1 when required config is missing before calling u
   }
 });
 
-test('startup loads .env file, overrides with process.env, serves catalog, and keeps logs clean', async (t) => {
-  const tempDir = mkdtempSync(join(tmpdir(), 'startup-test-env-'));
+test('startup loads root .env from backend cwd, overrides with process.env, serves catalog, and keeps logs clean', async (t) => {
+  const tempDir = createStartupFixture('startup-test-env-');
   const fileKey = 'file-key-secret-123';
   const envKey = 'env-key-secret-456';
   const promptSentinel = 'PROMPT_SENTINEL_NEVER_LOG';
@@ -187,19 +198,25 @@ test('startup loads .env file, overrides with process.env, serves catalog, and k
     `PORT=${filePort}\nLLM_BASE_URL=${stubA.baseUrl}\nLLM_API_KEY=${fileKey}\nLLM_TIMEOUT_MS=10000\n`,
   );
 
+  writeFileSync(join(tempDir, 'backend/.env'), 'LLM_TIMEOUT_MS=invalid\n');
+
   let stdout = '';
   let stderr = '';
   let child: ChildProcess | undefined;
 
   try {
-    child = spawn(process.execPath, ['--import', tsxLoaderUrl, absoluteServerPath], {
-      cwd: tempDir,
-      env: getSanitizedEnv({
-        PORT: String(targetPort),
-        LLM_BASE_URL: stubB.baseUrl,
-        LLM_API_KEY: envKey,
-      }),
-    });
+    child = spawn(
+      process.execPath,
+      ['--import', tsxLoaderUrl, join(tempDir, 'backend/src/server.ts')],
+      {
+        cwd: join(tempDir, 'backend'),
+        env: getSanitizedEnv({
+          PORT: String(targetPort),
+          LLM_BASE_URL: stubB.baseUrl,
+          LLM_API_KEY: envKey,
+        }),
+      },
+    );
 
     child.stdout?.on('data', (d) => {
       stdout += d.toString();
@@ -321,7 +338,7 @@ test('startup exits with code 1 and safe log when upstream catalog fails', async
 
   for (const testCase of failureCases) {
     await t.test(testCase.name, async () => {
-      const tempDir = mkdtempSync(join(tmpdir(), 'startup-test-fail-'));
+      const tempDir = createStartupFixture('startup-test-fail-');
       const port = await getFreePort();
       const fakeKey = 'startup-fail-key-secret';
       const stub = await startUpstream((_req, res) => {
@@ -332,15 +349,19 @@ test('startup exits with code 1 and safe log when upstream catalog fails', async
       let stderr = '';
       let child: ChildProcess | undefined;
       try {
-        child = spawn(process.execPath, ['--import', tsxLoaderUrl, absoluteServerPath], {
-          cwd: tempDir,
-          env: getSanitizedEnv({
-            PORT: String(port),
-            LLM_BASE_URL: stub.baseUrl,
-            LLM_API_KEY: fakeKey,
-            LLM_TIMEOUT_MS: testCase.timeoutMs ?? '1500',
-          }),
-        });
+        child = spawn(
+          process.execPath,
+          ['--import', tsxLoaderUrl, join(tempDir, 'backend/src/server.ts')],
+          {
+            cwd: tempDir,
+            env: getSanitizedEnv({
+              PORT: String(port),
+              LLM_BASE_URL: stub.baseUrl,
+              LLM_API_KEY: fakeKey,
+              LLM_TIMEOUT_MS: testCase.timeoutMs ?? '1500',
+            }),
+          },
+        );
         child.stdout?.on('data', (d) => {
           stdout += d.toString();
         });
@@ -364,7 +385,7 @@ test('startup exits with code 1 and safe log when upstream catalog fails', async
 });
 
 test('startup succeeds with empty catalog and rejects generation requests with 400 Unknown modelId', async (t) => {
-  const tempDir = mkdtempSync(join(tmpdir(), 'startup-test-empty-'));
+  const tempDir = createStartupFixture('startup-test-empty-');
   const targetPort = await getFreePort();
   const stub = await startUpstream((req, res) => {
     if (req.method === 'GET' && req.url === '/models') {
@@ -379,14 +400,18 @@ test('startup succeeds with empty catalog and rejects generation requests with 4
 
   let child: ChildProcess | undefined;
   try {
-    child = spawn(process.execPath, ['--import', tsxLoaderUrl, absoluteServerPath], {
-      cwd: tempDir,
-      env: getSanitizedEnv({
-        PORT: String(targetPort),
-        LLM_BASE_URL: stub.baseUrl,
-        LLM_API_KEY: 'empty-catalog-key',
-      }),
-    });
+    child = spawn(
+      process.execPath,
+      ['--import', tsxLoaderUrl, join(tempDir, 'backend/src/server.ts')],
+      {
+        cwd: tempDir,
+        env: getSanitizedEnv({
+          PORT: String(targetPort),
+          LLM_BASE_URL: stub.baseUrl,
+          LLM_API_KEY: 'empty-catalog-key',
+        }),
+      },
+    );
 
     const health = await waitForHealth(targetPort, child);
     assert.equal(health.status, 200);
@@ -411,7 +436,7 @@ test('startup succeeds with empty catalog and rejects generation requests with 4
 });
 
 test('startup loads catalog then exits with code 1 when port is already occupied', async (t) => {
-  const tempDir = mkdtempSync(join(tmpdir(), 'startup-test-busy-'));
+  const tempDir = createStartupFixture('startup-test-busy-');
   const occupier = createServer();
   await new Promise<void>((resolveListen, rejectListen) => {
     occupier.once('error', rejectListen);
@@ -447,14 +472,18 @@ test('startup loads catalog then exits with code 1 when port is already occupied
   let child: ChildProcess | undefined;
 
   try {
-    child = spawn(process.execPath, ['--import', tsxLoaderUrl, absoluteServerPath], {
-      cwd: tempDir,
-      env: getSanitizedEnv({
-        PORT: String(busyPort),
-        LLM_BASE_URL: stub.baseUrl,
-        LLM_API_KEY: fakeKey,
-      }),
-    });
+    child = spawn(
+      process.execPath,
+      ['--import', tsxLoaderUrl, join(tempDir, 'backend/src/server.ts')],
+      {
+        cwd: tempDir,
+        env: getSanitizedEnv({
+          PORT: String(busyPort),
+          LLM_BASE_URL: stub.baseUrl,
+          LLM_API_KEY: fakeKey,
+        }),
+      },
+    );
     child.stdout?.on('data', (d) => {
       stdout += d.toString();
     });
@@ -472,3 +501,35 @@ test('startup loads catalog then exits with code 1 when port is already occupied
     rmSync(tempDir, { recursive: true, force: true });
   }
 });
+
+for (const cwd of ['.', 'backend']) {
+  test('startup reads config exclusively from root .env with cwd ' + cwd, async (t) => {
+    const tempDir = createStartupFixture('startup-test-root-');
+    const port = await getFreePort();
+    const stub = await startUpstream((req, res) => {
+      assert.equal(req.headers['x-api-key'], 'root-file-test-key');
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ models: [] }));
+    });
+    t.after(() => stub.close());
+    writeFileSync(
+      join(tempDir, '.env'),
+      'PORT=' + port + '\nLLM_BASE_URL=' + stub.baseUrl + '\nLLM_API_KEY=root-file-test-key\n',
+    );
+    let child: ChildProcess | undefined;
+    try {
+      child = spawn(
+        process.execPath,
+        ['--import', tsxLoaderUrl, join(tempDir, 'backend/src/server.ts')],
+        {
+          cwd: join(tempDir, cwd),
+          env: getSanitizedEnv(),
+        },
+      );
+      assert.equal((await waitForHealth(port, child)).status, 200);
+    } finally {
+      await stopChild(child);
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+}

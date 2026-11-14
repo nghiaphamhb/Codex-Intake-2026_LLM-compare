@@ -278,4 +278,39 @@ describe('PromptForm sizing regressions', () => {
     expect(ref.current).toBeInstanceOf(HTMLTextAreaElement);
     expect(ref.current).toBe(screen.getByRole('textbox'));
   });
+
+  it('disables send button, blocks submit and enter when disabled=true while textarea remains editable', async () => {
+    const user = userEvent.setup();
+    const handleSend = vi.fn();
+    const handleValueChange = vi.fn();
+
+    render(
+      <PromptForm
+        value="Valid question"
+        onValueChange={handleValueChange}
+        busy={false}
+        disabled={true}
+        onSend={handleSend}
+        onStop={() => {}}
+      />,
+    );
+
+    const textarea = screen.getByRole('textbox');
+    expect(textarea).not.toBeDisabled();
+
+    const sendBtn = screen.getByRole('button', { name: 'Отправить вопрос' });
+    expect(sendBtn).toBeDisabled();
+
+    // Click submit
+    await user.click(sendBtn);
+    expect(handleSend).not.toHaveBeenCalled();
+
+    // Press Enter
+    await user.type(textarea, '{Enter}');
+    expect(handleSend).not.toHaveBeenCalled();
+
+    // Typing still triggers onValueChange
+    await user.type(textarea, 'a');
+    expect(handleValueChange).toHaveBeenCalled();
+  });
 });
