@@ -1,3 +1,4 @@
+import { formatCostUsd } from './formatCost.js';
 import { useEffect, useReducer, useRef, useState, useCallback } from 'react';
 import type { CompareAction } from './types.js';
 import {
@@ -135,6 +136,7 @@ export function ComparePage() {
           answer: {
             state: 'success',
             markdown: result.text,
+            costLabel: formatCostUsd(result.costUsd),
             durationLabel,
           },
         });
@@ -384,6 +386,7 @@ export function ComparePage() {
           selectedModelIds={state.models.map((m) => m.id)}
           onSelect={handleSelectModel}
           onClose={handleClosePicker}
+          anchorRef={addModelBtnRef}
         />
       )}
     </div>

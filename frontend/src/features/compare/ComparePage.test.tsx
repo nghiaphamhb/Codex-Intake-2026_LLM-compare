@@ -181,11 +181,12 @@ describe('ComparePage', () => {
           modelId: 'test/model-3',
           text: 'Ответ от Model Three',
           durationMs: 1500,
+          costUsd: 0.0016,
         });
       });
 
       expect(screen.getByText('Ответ от Model Three')).toBeInTheDocument();
-      expect(screen.getByText('1,5 с')).toBeInTheDocument();
+      expect(screen.getByText('$0,0016').parentElement).toHaveTextContent('1,5 с · $0,0016');
 
       // Resolve Model 1 second
       await act(async () => {

@@ -533,3 +533,94 @@ for (const cwd of ['.', 'backend']) {
     }
   });
 }
+
+test('startup preserves pricing snapshot for generation cost without exposing metadata in catalog or logs', async () => {
+  const tempDir = createStartupFixture('startup-test-cost-');
+  const port = await getFreePort();
+  const fakeKey = 'startup-cost-fake-key';
+  const promptSentinel = 'STARTUP_COST_PROMPT_NEVER_LOG';
+  const textSentinel = 'STARTUP_COST_TEXT_NEVER_LOG';
+  let modelCalls = 0;
+  let generateCalls = 0;
+  let pricing = { input: 0.25, output: 2 };
+  const stub = await startUpstream((req, res) => {
+    assert.equal(req.headers['x-api-key'], fakeKey);
+    if (req.method === 'GET' && req.url === '/models') {
+      modelCalls++;
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ models: [{ id: 'test/priced', name: 'Priced', pricing }] }));
+      return;
+    }
+    if (req.method === 'POST' && req.url === '/generate') {
+      generateCalls++;
+      req.resume();
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          text: textSentinel,
+          usage: { inputTokens: 1000, outputTokens: 675, totalTokens: 9999, reasoningTokens: 999 },
+        }),
+      );
+      return;
+    }
+    res.writeHead(404);
+    res.end();
+  });
+  let child: ChildProcess | undefined;
+  let output = '';
+  try {
+    child = spawn(
+      process.execPath,
+      ['--import', tsxLoaderUrl, join(tempDir, 'backend/src/server.ts')],
+      {
+        cwd: tempDir,
+        env: getSanitizedEnv({
+          PORT: String(port),
+          LLM_BASE_URL: stub.baseUrl,
+          LLM_API_KEY: fakeKey,
+          LLM_TIMEOUT_MS: '1500',
+        }),
+      },
+    );
+    child.stdout?.on('data', (chunk) => {
+      output += chunk.toString();
+    });
+    child.stderr?.on('data', (chunk) => {
+      output += chunk.toString();
+    });
+    assert.equal((await waitForHealth(port, child)).status, 200);
+
+    // Changes upstream after startup cannot change the captured catalog pricing.
+    pricing = { input: 900, output: 900 };
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const catalog = await fetch(`http://127.0.0.1:${port}/api/models`);
+      assert.equal(catalog.status, 200);
+      assert.deepEqual(await catalog.json(), {
+        models: [{ id: 'test/priced', name: 'Priced', provider: 'test' }],
+      });
+      const response = await fetch(`http://127.0.0.1:${port}/api/generate`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ prompt: promptSentinel, modelId: 'test/priced' }),
+      });
+      assert.equal(response.status, 200);
+      const body = await response.json();
+      assert.deepEqual(Object.keys(body).sort(), ['costUsd', 'durationMs', 'modelId', 'text']);
+      assert.equal(body.modelId, 'test/priced');
+      assert.equal(body.text, textSentinel);
+      assert.equal(typeof body.costUsd, 'number');
+      assert.ok(Math.abs(body.costUsd - 0.0016) < 1e-12);
+      assert.equal(Number.isFinite(body.durationMs) && body.durationMs >= 0, true);
+    }
+    assert.equal(modelCalls, 1);
+    assert.equal(generateCalls, 2);
+    await stopChild(child);
+    for (const sentinel of [fakeKey, promptSentinel, textSentinel, 'inputTokens', 'pricing']) {
+      assert.equal(output.includes(sentinel), false);
+    }
+  } finally {
+    await stopChild(child);
+    await stub.close();
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});

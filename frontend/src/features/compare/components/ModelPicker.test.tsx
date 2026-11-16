@@ -40,7 +40,10 @@ describe('ModelPicker', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Добавить модель' })).toBeInTheDocument();
     expect(screen.getByRole('textbox', { name: 'Поиск модели' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Закрыть' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Закрыть' }).textContent).toBe('');
+    expect(screen.getByRole('textbox')).toHaveAttribute('placeholder', 'Найти модель');
+    expect(screen.getByText('В сравнении может быть до 4 моделей')).toBeInTheDocument();
+    expect(screen.getByRole('dialog').querySelectorAll('img')).toHaveLength(0);
   });
 
   it('renders catalog models with name and provider', () => {
@@ -200,5 +203,16 @@ describe('ModelPicker', () => {
     const dialog = screen.getByRole('dialog');
     fireEvent(dialog, new Event('cancel', { cancelable: true }));
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+  it('keeps search and focus when selected IDs change without remounting', async () => {
+    const onClose = vi.fn();
+    const props = { catalog: mockCatalog, selectedModelIds: ['m-1'], onSelect: vi.fn(), onClose };
+    const view = render(<ModelPicker {...props} />);
+    const search = screen.getByRole('textbox');
+    await userEvent.type(search, 'Демо');
+    view.rerender(<ModelPicker {...props} selectedModelIds={['m-1', 'm-2']} />);
+    expect(search).toHaveValue('Демо');
+    expect(search).toHaveFocus();
+    expect(onClose).not.toHaveBeenCalled();
   });
 });

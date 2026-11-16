@@ -72,7 +72,14 @@ test('full integration overlaps 2, 3, and 4 concurrent model requests while fetc
         if (req.method === 'GET' && req.url === '/models') {
           modelsCalls += 1;
           res.writeHead(200, { 'content-type': 'application/json' });
-          res.end(JSON.stringify({ models: catalogFixture.slice(0, concurrency) }));
+          res.end(
+            JSON.stringify({
+              models: catalogFixture.slice(0, concurrency).map((model, index) => ({
+                ...model,
+                pricing: { input: index + 1, output: 2 * (index + 1) },
+              })),
+            }),
+          );
           return;
         }
         if (req.method === 'POST' && req.url === '/generate') {
@@ -82,7 +89,17 @@ test('full integration overlaps 2, 3, and 4 concurrent model requests while fetc
           const prompt = String(body.prompt);
           await barrier.arrive();
           res.writeHead(200, { 'content-type': 'application/json' });
-          res.end(JSON.stringify({ text: `Answer for ${model}: ${prompt}` }));
+          res.end(
+            JSON.stringify({
+              text: `Answer for ${model}: ${prompt}`,
+              usage: {
+                inputTokens: 1000,
+                outputTokens: 500 * (catalogFixture.findIndex((item) => item.id === model) + 1),
+                totalTokens: 99999,
+                reasoningTokens: 100,
+              },
+            }),
+          );
           return;
         }
         res.writeHead(404);
@@ -117,11 +134,17 @@ test('full integration overlaps 2, 3, and 4 concurrent model requests while fetc
       for (let i = 0; i < selectedIds.length; i += 1) {
         const res = responses[i];
         assert.equal(res.statusCode, 200);
-        const json = res.json() as { modelId: string; text: string; durationMs: number };
+        const json = res.json() as {
+          modelId: string;
+          text: string;
+          durationMs: number;
+          costUsd: number;
+        };
         assert.equal(json.modelId, selectedIds[i]);
         assert.equal(json.text, `Answer for ${selectedIds[i]}: Compare models`);
         assert.equal(Number.isFinite(json.durationMs), true);
         assert.ok(json.durationMs >= 0);
+        assert.ok(Math.abs(json.costUsd - ((i + 1) * (i + 2)) / 1000) < 1e-12);
       }
     });
   }

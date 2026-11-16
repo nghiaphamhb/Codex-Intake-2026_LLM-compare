@@ -14,10 +14,11 @@ export interface BuildAppOptions {
 export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const modelsInput = options.models ?? configuredModels;
   validateModels(modelsInput);
-  const modelsSnapshot: Model[] = modelsInput.map(({ id, name, provider }) => ({
+  const modelsSnapshot: Model[] = modelsInput.map(({ id, name, provider, pricing }) => ({
     id,
     name,
     provider,
+    ...(pricing ? { pricing: { ...pricing } } : {}),
   }));
 
   const app = Fastify({

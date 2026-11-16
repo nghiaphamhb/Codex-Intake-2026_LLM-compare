@@ -15,6 +15,10 @@ export type AnswerCellProps = {
 
 export function AnswerCell({ model, turnId, answer, onRetry, className }: AnswerCellProps) {
   const cellId = `cell-${model.id}-${turnId}`;
+  const costDescription =
+    answer?.state === 'success' && answer.costLabel
+      ? `Оценочная стоимость: ${answer.costLabel}. Стандартные тарифы; кэш и специальные тарифы не учтены.`
+      : undefined;
 
   if (!answer) {
     return (
@@ -48,9 +52,15 @@ export function AnswerCell({ model, turnId, answer, onRetry, className }: Answer
           )}
           <AnswerContent markdown={answer.markdown} className={styles.desktopContent} />
           <div className={styles.metadata}>
-            {answer.costLabel
-              ? `${answer.durationLabel} · ${answer.costLabel}`
-              : answer.durationLabel}
+            {answer.durationLabel}
+            {answer.costLabel && (
+              <>
+                {' · '}
+                <span title={costDescription} aria-label={costDescription}>
+                  {answer.costLabel}
+                </span>
+              </>
+            )}
           </div>
         </>
       )}

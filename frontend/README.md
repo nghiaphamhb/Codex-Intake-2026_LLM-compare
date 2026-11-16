@@ -27,4 +27,4 @@ Desktop results: 2609:2229. Mobile: 2611:2452.
   OFL license copies are in public/assets/fonts; Vite copies fonts and licenses into the build.
 - Shared global styles include dark color scheme, keyboard focus and reduced motion.
 
-FE006 is verified offline; browser-to-BTC live acceptance has not been run. Streaming, Stop, token/pricing and real reasoning are deferred.
+FE006 is verified offline; browser-to-BTC live acceptance has not been run. FE007 displays time · estimated USD with no token count and adds the redesigned anchored model picker. Streaming, Stop and real reasoning remain deferred. Costs are estimates, not BTC billing/quota; null cost is omitted.
