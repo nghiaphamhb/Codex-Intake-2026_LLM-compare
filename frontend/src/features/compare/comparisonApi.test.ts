@@ -184,6 +184,103 @@ describe('comparisonApi', () => {
   });
 
   describe('generateAnswer', () => {
+    it.each([0, 0.0016, 0.00001, 1234.56789])(
+      'preserves finite costUsd %s without rounding or usage',
+      async (costUsd) => {
+        globalThis.fetch = vi.fn().mockResolvedValue(
+          new Response(
+            JSON.stringify({
+              modelId: 'openai/gpt-5-mini',
+              text: '  Answer\n',
+              durationMs: 1800,
+              costUsd,
+              usage: { total_tokens: 123 },
+              pricing: { prompt: '1' },
+            }),
+            { status: 200 },
+          ),
+        );
+
+        await expect(
+          generateAnswer(
+            { prompt: 'Hi', modelId: 'openai/gpt-5-mini' },
+            new AbortController().signal,
+          ),
+        ).resolves.toEqual({
+          modelId: 'openai/gpt-5-mini',
+          text: '  Answer\n',
+          durationMs: 1800,
+          costUsd,
+        });
+      },
+    );
+
+    it.each([undefined, null, '0.0016', {}, [], -1, NaN, Infinity, -Infinity])(
+      'keeps the answer without unavailable or invalid cost %s',
+      async (costUsd) => {
+        // A decoded response preserves nonfinite values that JSON.stringify would turn into null.
+        globalThis.fetch = vi.fn().mockResolvedValue({
+          status: 200,
+          json: async () => ({
+            modelId: 'openai/gpt-5-mini',
+            text: '  Answer\n',
+            durationMs: 1800,
+            costUsd,
+          }),
+        });
+
+        await expect(
+          generateAnswer(
+            { prompt: 'Hi', modelId: 'openai/gpt-5-mini' },
+            new AbortController().signal,
+          ),
+        ).resolves.toEqual({
+          modelId: 'openai/gpt-5-mini',
+          text: '  Answer\n',
+          durationMs: 1800,
+        });
+      },
+    );
+
+    it('ignores inherited costUsd', async () => {
+      const payload = Object.assign(Object.create({ costUsd: 0.0016 }), {
+        modelId: 'openai/gpt-5-mini',
+        text: 'Answer',
+        durationMs: 1800,
+      });
+      globalThis.fetch = vi.fn().mockResolvedValue({ status: 200, json: async () => payload });
+      await expect(
+        generateAnswer(
+          { prompt: 'Hi', modelId: 'openai/gpt-5-mini' },
+          new AbortController().signal,
+        ),
+      ).resolves.toEqual({
+        modelId: 'openai/gpt-5-mini',
+        text: 'Answer',
+        durationMs: 1800,
+      });
+    });
+
+    it('rejects invalid core fields even with valid costUsd', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            modelId: 'openai/gpt-5-mini',
+            text: null,
+            durationMs: 1800,
+            costUsd: 0.0016,
+          }),
+          { status: 200 },
+        ),
+      );
+      await expect(
+        generateAnswer(
+          { prompt: 'Hi', modelId: 'openai/gpt-5-mini' },
+          new AbortController().signal,
+        ),
+      ).rejects.toMatchObject({ code: 'INVALID_RESPONSE' });
+    });
+
     it('sends POST /api/generate with application/json body and forwards signal', async () => {
       const controller = new AbortController();
       let capturedUrl = '';

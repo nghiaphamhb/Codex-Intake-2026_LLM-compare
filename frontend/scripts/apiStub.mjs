@@ -137,7 +137,15 @@ export function createApiStub() {
             JSON.stringify({
               modelId,
               text: getDeterministicMarkdown(modelId, prompt),
-              durationMs: 1200,
+              durationMs: 1800,
+              costUsd:
+                modelId === 'claude-demo'
+                  ? 0.0016
+                  : modelId === 'giga-demo'
+                    ? 0
+                    : modelId === 'demo-alpha'
+                      ? 0.00001
+                      : null,
             }),
           );
         };

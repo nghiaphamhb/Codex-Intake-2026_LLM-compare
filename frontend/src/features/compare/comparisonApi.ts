@@ -1,6 +1,11 @@
 import type { CompareModel } from './types.js';
 
-export type GenerateResponse = { modelId: string; text: string; durationMs: number };
+export type GenerateResponse = {
+  modelId: string;
+  text: string;
+  durationMs: number;
+  costUsd?: number | null;
+};
 
 export type ComparisonApiErrorCode =
   | 'INVALID_REQUEST'
@@ -187,5 +192,14 @@ export async function generateAnswer(
     throw new ComparisonApiError('INVALID_RESPONSE');
   }
 
-  return { modelId, text, durationMs };
+  const result: GenerateResponse = { modelId, text, durationMs };
+  if (
+    Object.hasOwn(json, 'costUsd') &&
+    typeof json.costUsd === 'number' &&
+    Number.isFinite(json.costUsd) &&
+    json.costUsd >= 0
+  ) {
+    result.costUsd = json.costUsd;
+  }
+  return result;
 }

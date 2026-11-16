@@ -284,6 +284,7 @@ test('POST /api/generate forwards exact prompt and returns 200 payload for valid
         modelId: 'test/model-a',
         text: '  Markdown\n',
         durationMs: 12.5,
+        costUsd: null,
       });
     });
   }
@@ -366,7 +367,12 @@ test('POST /api/generate and GET /api/models share the same immutable snapshot',
     payload: { prompt: 'Hello', modelId: 'test/model-a' },
   });
   assert.equal(validRes.statusCode, 200);
-  assert.deepEqual(validRes.json(), { modelId: 'test/model-a', text: 'ok', durationMs: 5 });
+  assert.deepEqual(validRes.json(), {
+    modelId: 'test/model-a',
+    text: 'ok',
+    durationMs: 5,
+    costUsd: null,
+  });
 
   for (const mutatedId of ['test/model-b', 'test/model-c']) {
     const rejectedRes = await app.inject({
@@ -396,6 +402,7 @@ test('POST /api/generate handles charset, 415 unsupported media type, and 413 pa
     modelId: 'test/model-a',
     text: 'charset ok',
     durationMs: 3,
+    costUsd: null,
   });
 
   const xmlRes = await app.inject({

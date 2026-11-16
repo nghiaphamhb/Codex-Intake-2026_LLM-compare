@@ -548,3 +548,93 @@ test(
     assert.equal(afterHeaderCalls, 1);
   },
 );
+
+test('pricing and usage normalize independently without rejecting valid text or catalog', async (t) => {
+  const invalid = [
+    undefined,
+    null,
+    [],
+    {},
+    'bad',
+    { input: '1', output: 2 },
+    { input: -1, output: 2 },
+    { input: 1 },
+    { inputTokens: 1.5, outputTokens: 2 },
+    { inputTokens: Number.MAX_SAFE_INTEGER + 1, outputTokens: 2 },
+  ];
+  for (const metadata of invalid) {
+    await t.test(JSON.stringify(metadata) ?? 'missing', async () => {
+      const stub = await startUpstream((req, res) => {
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(
+          JSON.stringify(
+            req.method === 'GET'
+              ? { models: [{ id: 'test/model', name: 'Test', pricing: metadata }] }
+              : { text: '', usage: metadata },
+          ),
+        );
+      });
+      try {
+        const client = createAiProxyClient({
+          llmBaseUrl: stub.baseUrl,
+          llmApiKey: 'fake-key',
+          llmTimeoutMs: 1000,
+        });
+        assert.deepEqual(await client.listModels(), [
+          { id: 'test/model', name: 'Test', provider: 'test' },
+        ]);
+        const result = await client.generate({ prompt: 'Hi', modelId: 'test/model' });
+        assert.equal(result.text, '');
+        assert.equal(result.usage, undefined);
+      } finally {
+        await stub.close();
+      }
+    });
+  }
+  for (const zero of [false, true]) {
+    const stub = await startUpstream((req, res) => {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify(
+          req.method === 'GET'
+            ? {
+                models: [
+                  {
+                    id: 'test/model',
+                    name: 'Test',
+                    pricing: { input: zero ? 0 : 0.25, output: zero ? 0 : 2, cacheRead: 'ignored' },
+                  },
+                ],
+              }
+            : {
+                text: 'OK',
+                usage: {
+                  inputTokens: zero ? 0 : 1000,
+                  outputTokens: zero ? 0 : 675,
+                  reasoningTokens: 999,
+                  totalTokens: 99999,
+                  cachedInputTokens: 100,
+                },
+              },
+        ),
+      );
+    });
+    try {
+      const client = createAiProxyClient({
+        llmBaseUrl: stub.baseUrl,
+        llmApiKey: 'fake-key',
+        llmTimeoutMs: 1000,
+      });
+      assert.deepEqual((await client.listModels())[0].pricing, {
+        input: zero ? 0 : 0.25,
+        output: zero ? 0 : 2,
+      });
+      assert.deepEqual((await client.generate({ prompt: 'Hi', modelId: 'test/model' })).usage, {
+        inputTokens: zero ? 0 : 1000,
+        outputTokens: zero ? 0 : 675,
+      });
+    } finally {
+      await stub.close();
+    }
+  }
+});

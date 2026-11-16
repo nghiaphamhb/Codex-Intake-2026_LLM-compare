@@ -4,7 +4,7 @@ So sánh câu trả lời của nhiều model cạnh nhau. Frontend dùng React/
 
 ## Trạng thái hiện tại
 
-FE006 đã nối trang so sánh với API backend: catalog thật, 2–4 request độc lập, trạng thái chờ/kết quả/lỗi, Retry từng ô và New. Reload mở hội thoại rỗng; fixture chỉ dùng cho test/showcase. Đã kiểm tra local bằng HTTP stub qua Vite proxy, **chưa nghiệm thu browser → BTC thật**. Backend từng smoke live thành công với catalog 10 model và một GPT-5 mini ngày 2026-11-13. Chưa có streaming/Stop, token/giá, reasoning thật, persistence hoặc Share khôi phục dữ liệu.
+FE006 đã nối trang so sánh với API backend: catalog thật, 2–4 request độc lập, trạng thái chờ/kết quả/lỗi, Retry từng ô và New. Reload mở hội thoại rỗng; fixture chỉ dùng cho test/showcase. Đã kiểm tra local bằng HTTP stub qua Vite proxy, **chưa nghiệm thu browser → BTC thật**. Backend từng smoke live thành công với catalog 10 model và một GPT-5 mini ngày 2026-11-13. BE007 đã bổ sung costUsd vào API backend; FE007 đã hiển thị thời gian · chi phí ước tính (không token) và sửa hộp thêm model theo ảnh tham chiếu. Chưa có streaming/Stop, reasoning thật, persistence hoặc Share khôi phục dữ liệu.
 
 ## Cài đặt và chạy
 
@@ -93,6 +93,18 @@ Hoặc từ thư mục `backend/`: `npm run smoke:proxy` và `npm run smoke:prox
 - [FE005 — Tương tác và lịch sử nghiệm thu](specs/FE005-comparison-interactions.md)
 - [Pattern viết spec](specs/F000-pattern.md) · [Quy tắc làm việc](AGENTS.md)
 
-Thứ tự tiếp theo: **BE007** bổ sung contract metadata → **FE007** hiện token/giá ước tính → **BE008/FE008** streaming, Stop và reasoning khi có → **FE009** mobile → **BE009/FE010** nghiệm thu/bàn giao. BE006 đã có CLI và kiểm thử local; FE006 đã triển khai và kiểm tra offline. BE007–BE009 và FE007–FE010 chưa soạn. Fixture mô phỏng tiếp tục phục vụ test; chưa nghiệm thu frontend với BTC thật.
+Thứ tự tiếp theo: **BE008/FE008** streaming, Stop và reasoning khi có → **FE009** mobile → **BE009/FE010** nghiệm thu/bàn giao. BE006 đã có CLI và kiểm thử local; FE006 đã triển khai và kiểm tra offline. BE007 đã triển khai backend; FE007 đã triển khai và nghiệm thu local. BE008–BE009 và FE008–FE010 chưa soạn. Fixture mô phỏng tiếp tục phục vụ test; chưa nghiệm thu frontend với BTC thật.
 
 Contract tham chiếu: [repo BTC](https://github.com/codex-team/ai-proxy) và [OpenAPI live](https://llm.codex.so/docs/json), đối chiếu 2026-11-13. Giá USD/triệu token và usage không đồng nghĩa quota của key; chi phí hiển thị sau này chỉ là ước tính.
+
+## Chi phí ước tính backend (BE007)
+
+`POST /api/generate` thành công trả `{ modelId, text, durationMs, costUsd }`. `costUsd` là USD chưa làm tròn; `null` khi thiếu metadata hợp lệ, `0` là chi phí bằng0 thật. Backend dùng pricing snapshot tại startup và số input/output token báo cáo; không trả token/usage/pricing qua API công khai. `GET /api/models` giữ nguyên id/name/provider.
+
+Đây là ước tính theo giá chuẩn input/output, không điều chỉnh cache read/write, vùng, priority/flex, long-context hoặc phí reasoning khác. Không phải hóa đơn BTC, quota còn lại hoặc cam kết cận trên/dưới. Restart backend để cập nhật snapshot giá. FE006 cũ bỏ qua costUsd; FE007 hiển thị thời gian · chi phí, không số token.
+
+## FE007: metadata và phần bổ sung picker
+
+Mỗi câu trả lời thành công hiển thị thời gian · USD (ví dụ `1,8 с · $0,0016`), không hiển thị token. Thiếu/null/giá không hợp lệ thì chỉ hiện thời gian; giá0 giữ `$0,0000`, giá dương dưới0.0001 USD hiện `< $0,0001`. Tooltip chi phí giải thích đây là ước tính theo giá chuẩn, không hóa đơn/quota.
+
+Phần bổ sung theo yêu cầu: picker bám vùng Add, nút X tròn, kính lúp, dấu cộng từng model và footer giới hạn4. Giữ native modal/Escape/focus; icon inline hoạt động khi Offline. Số đo picker dùng baseline trong spec vì node Figma truy cập được chưa chứa popup tương ứng; không tuyên bố khớp pixel tuyệt đối.

@@ -38,8 +38,36 @@ describe('AnswerCell', () => {
     expect(screen.getByText('World')).toBeInTheDocument();
 
     // Metadata
-    expect(screen.getByText('2,1 с · $0,0021')).toBeInTheDocument();
+    expect(screen.getByTestId('cell-claude-demo-turn-1')).toHaveTextContent('2,1 с · $0,0021');
   });
+
+  it.each(['$0,0016', '$0,0000', '< $0,0001'])(
+    'explains the estimate accessibly without extra visible metadata for %s',
+    (costLabel) => {
+      render(
+        <AnswerCell
+          model={model}
+          turnId="turn-1"
+          answer={{
+            state: 'success',
+            markdown: 'Answer',
+            durationLabel: '1,8 с',
+            costLabel,
+          }}
+          onRetry={vi.fn()}
+        />,
+      );
+      const cost = screen.getByText(costLabel);
+      expect(cost).toHaveAttribute(
+        'title',
+        `Оценочная стоимость: ${costLabel}. Стандартные тарифы; кэш и специальные тарифы не учтены.`,
+      );
+      expect(cost).toHaveAttribute('aria-label', cost.getAttribute('title'));
+      expect(cost.parentElement).toHaveTextContent(`1,8 с · ${costLabel}`);
+      expect(cost.parentElement?.textContent).toBe(`1,8 с · ${costLabel}`);
+      expect(screen.queryByText(/token|usage|токен/i)).not.toBeInTheDocument();
+    },
+  );
 
   it('renders success state without separator when costLabel is undefined', () => {
     const successWithoutCost: ResultAnswer = {

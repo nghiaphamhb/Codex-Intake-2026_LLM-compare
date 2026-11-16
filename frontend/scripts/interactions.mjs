@@ -47,6 +47,10 @@ await withBrowser(async (session) => {
   await denied.close();
   await page.bringToFront();
 
+  assert.equal(await page.getByText('$0,0016', { exact: true }).count(), 1);
+  assert.equal(await page.getByText('$0,0000', { exact: true }).count(), 1);
+  assert.equal(await page.locator('[title^="Оценочная стоимость:"]').count(), 2);
+
   // 2. Overlap & pending state with barrier
   stub.setHoldGenerate(true);
   await input.fill('Вопрос для проверки одновременности');
@@ -136,6 +140,7 @@ await withBrowser(async (session) => {
   assert.equal(await search.inputValue(), '');
   assert.equal(await page.getByRole('button', { name: /Демо Альфа/ }).isDisabled(), false);
   assert.equal(await dialog.getByRole('button', { name: /Claude Haiku/ }).isDisabled(), true);
+  await dialog.getByRole('button', { name: /Демо Альфа/ }).hover();
   await saveScreenshot(page, 'picker');
   await search.fill('no-such-model');
   assert.equal(await page.getByText('Модели не найдены.', { exact: true }).count(), 1);
@@ -294,6 +299,69 @@ await withBrowser(async (session) => {
   await stub.waitForActive(2);
   stub.setHoldGenerate(false);
   await page.waitForFunction(() => !document.body.textContent.includes('Ждём ответ…'));
+  // FE007: anchored picker, offline inline icons and constrained viewport.
+  await add.click();
+  const bounds = await dialog.boundingBox();
+  const addBounds = await add.boundingBox();
+  assert.ok(Math.abs(bounds.x + bounds.width - addBounds.x - addBounds.width) < 2);
+  assert.equal(await dialog.getByPlaceholder('Найти модель').count(), 1);
+  assert.equal(await dialog.getByText('В сравнении может быть до 4 моделей').count(), 1);
+  assert.equal(await dialog.locator('img, use, image').count(), 0);
+  const panel = await dialog.boundingBox();
+  await page.mouse.click(panel.x + 4, panel.y + 4);
+  assert.equal(await dialog.count(), 1);
+  await search.fill('Демо');
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('Shift+Tab');
+  assert.equal(await dialog.evaluate((e) => e.contains(document.activeElement)), true);
+  await search.fill('');
+  await page.mouse.click(16, 200);
+  await closeAndCheck();
+  await add.click();
+  await context.setOffline(true);
+  await saveScreenshot(page, 'fe007-picker-offline');
+  assert.ok((await dialog.locator('svg').count()) >= 3);
+  await context.setOffline(false);
+  await page.getByRole('button', { name: 'Закрыть', exact: true }).click();
+  await closeAndCheck();
+  stub.setCatalog(
+    Array.from({ length: 30 }, (_, i) => ({
+      id: 'long-' + i,
+      name: 'Long model ' + i,
+      provider: 'Provider',
+    })),
+  );
+  await reset();
+  await page.setViewportSize({ width: 1280, height: 360 });
+  await add.click();
+  await search.fill('');
+  await page.waitForFunction(() => {
+    const d = document.querySelector('dialog').getBoundingClientRect();
+    return d.top >= 15 && d.bottom <= innerHeight - 15;
+  });
+  assert.equal(
+    await dialog.locator('[class*="modelList"]').evaluate((e) => e.scrollHeight > e.clientHeight),
+    true,
+  );
+  await page.getByRole('button', { name: 'Закрыть', exact: true }).click();
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await add.click();
+  const cdp = await context.newCDPSession(page);
+  await cdp.send('Emulation.setPageScaleFactor', { pageScaleFactor: 2 });
+  await page.waitForFunction(() => {
+    const d = document.querySelector('dialog').getBoundingClientRect(),
+      v = visualViewport;
+    return (
+      d.left >= v.offsetLeft + 15 &&
+      d.right <= v.offsetLeft + v.width - 15 &&
+      d.bottom <= v.offsetTop + v.height - 15
+    );
+  });
+  await saveScreenshot(page, 'fe007-picker-zoom2');
+  await cdp.send('Emulation.setPageScaleFactor', { pageScaleFactor: 1 });
+  await cdp.detach();
+  await page.getByRole('button', { name: 'Закрыть', exact: true }).click();
+  stub.resetCatalog();
 })
   .then(() =>
     console.log(

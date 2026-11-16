@@ -238,19 +238,26 @@ async function run(): Promise<void> {
       return;
     }
 
-    if (!isPlainRecord(genJson) || !hasExactKeys(genJson, ['modelId', 'text', 'durationMs'])) {
+    if (
+      !isPlainRecord(genJson) ||
+      !hasExactKeys(genJson, ['modelId', 'text', 'durationMs', 'costUsd'])
+    ) {
       failureCode = 'SMOKE_API_CONTRACT_FAILED';
       return;
     }
 
-    const { modelId, text, durationMs } = genJson;
+    const { modelId, text, durationMs, costUsd } = genJson;
     if (
       typeof modelId !== 'string' ||
       modelId !== targetModelId ||
       typeof text !== 'string' ||
       typeof durationMs !== 'number' ||
       !Number.isFinite(durationMs) ||
-      durationMs < 0
+      durationMs < 0 ||
+      !(
+        costUsd === null ||
+        (typeof costUsd === 'number' && Number.isFinite(costUsd) && costUsd >= 0)
+      )
     ) {
       failureCode = 'SMOKE_API_CONTRACT_FAILED';
       return;

@@ -1,10 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { Model } from '../models.js';
 
-export function registerModelRoutes(
-  app: FastifyInstance,
-  models: readonly Model[]
-): void {
+export function registerModelRoutes(app: FastifyInstance, models: readonly Model[]): void {
   app.get(
     '/api/models',
     {
@@ -24,18 +21,17 @@ export function registerModelRoutes(
                   properties: {
                     id: { type: 'string' },
                     name: { type: 'string' },
-                    provider: { type: 'string' }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
+                    provider: { type: 'string' },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
     },
     async () => {
-      return { models };
-    }
+      return { models: models.map(({ id, name, provider }) => ({ id, name, provider })) };
+    },
   );
 }
-

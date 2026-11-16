@@ -6,7 +6,13 @@ export interface GenerateInput {
   modelId: string;
 }
 
+export interface GenerateUsage {
+  inputTokens: number;
+  outputTokens: number;
+}
+
 export interface GenerateResult {
+  usage?: GenerateUsage;
   text: string;
   durationMs: number;
 }
@@ -102,7 +108,20 @@ function parseCatalog(parsed: unknown): Model[] {
     if (typeof id !== 'string' || typeof name !== 'string') {
       throw new AiProxyError('UPSTREAM_INVALID_RESPONSE');
     }
+    const rawPricing = getOwnProperty(item, 'pricing');
+    const input = isPlainRecord(rawPricing) ? getOwnProperty(rawPricing, 'input') : undefined;
+    const output = isPlainRecord(rawPricing) ? getOwnProperty(rawPricing, 'output') : undefined;
+    const pricing =
+      typeof input === 'number' &&
+      Number.isFinite(input) &&
+      input >= 0 &&
+      typeof output === 'number' &&
+      Number.isFinite(output) &&
+      output >= 0
+        ? { input, output }
+        : undefined;
     models.push({
+      ...(pricing ? { pricing } : {}),
       id,
       name,
       provider: deriveProvider(id),
@@ -118,7 +137,7 @@ function parseCatalog(parsed: unknown): Model[] {
   return models;
 }
 
-function parseGenerateResponse(parsed: unknown): string {
+function parseGenerateResponse(parsed: unknown): { text: string; usage?: GenerateUsage } {
   if (!isPlainRecord(parsed)) {
     throw new AiProxyError('UPSTREAM_INVALID_RESPONSE');
   }
@@ -128,7 +147,21 @@ function parseGenerateResponse(parsed: unknown): string {
     throw new AiProxyError('UPSTREAM_INVALID_RESPONSE');
   }
 
-  return text;
+  const rawUsage = getOwnProperty(parsed, 'usage');
+  const inputTokens = isPlainRecord(rawUsage) ? getOwnProperty(rawUsage, 'inputTokens') : undefined;
+  const outputTokens = isPlainRecord(rawUsage)
+    ? getOwnProperty(rawUsage, 'outputTokens')
+    : undefined;
+  const usage =
+    typeof inputTokens === 'number' &&
+    Number.isSafeInteger(inputTokens) &&
+    inputTokens >= 0 &&
+    typeof outputTokens === 'number' &&
+    Number.isSafeInteger(outputTokens) &&
+    outputTokens >= 0
+      ? { inputTokens, outputTokens }
+      : undefined;
+  return { text, ...(usage ? { usage } : {}) };
 }
 
 export function createAiProxyClient(
@@ -229,7 +262,7 @@ export function createAiProxyClient(
         },
         parseGenerateResponse,
       );
-      return { text: value, durationMs };
+      return { ...value, durationMs };
     },
   };
 }

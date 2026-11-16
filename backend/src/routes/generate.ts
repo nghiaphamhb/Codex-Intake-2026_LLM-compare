@@ -1,3 +1,4 @@
+import { estimateCostUsd } from '../cost.js';
 import type { FastifyInstance } from 'fastify';
 import { AiProxyError, type Generate } from '../aiProxy.js';
 import type { Model } from '../models.js';
@@ -19,12 +20,13 @@ const bodySchema = {
 
 const response200Schema = {
   type: 'object',
-  required: ['modelId', 'text', 'durationMs'],
+  required: ['modelId', 'text', 'durationMs', 'costUsd'],
   additionalProperties: false,
   properties: {
     modelId: { type: 'string' },
     text: { type: 'string' },
     durationMs: { type: 'number', minimum: 0 },
+    costUsd: { anyOf: [{ type: 'number', minimum: 0 }, { type: 'null' }] },
   },
 } as const;
 
@@ -53,7 +55,8 @@ export function registerGenerateRoutes(
         });
       }
 
-      if (!models.some((model) => model.id === request.body.modelId)) {
+      const selectedModel = models.find((model) => model.id === request.body.modelId);
+      if (!selectedModel) {
         return reply.code(400).send({
           error: {
             code: 'INVALID_REQUEST',
@@ -80,6 +83,7 @@ export function registerGenerateRoutes(
           modelId: request.body.modelId,
           text: result.text,
           durationMs: result.durationMs,
+          costUsd: estimateCostUsd(selectedModel.pricing, result.usage),
         });
       } catch (err: unknown) {
         if (err instanceof AiProxyError) {

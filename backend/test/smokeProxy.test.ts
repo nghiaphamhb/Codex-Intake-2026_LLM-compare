@@ -772,6 +772,38 @@ for (const cwd of ['.', 'backend']) {
 
 test('smoke CLI rejects internal response contract drift', async (t) => {
   const cases = [
+    { name: 'zero cost accepted', url: '/api/generate', change: 'body.costUsd = 0;', code: null },
+    {
+      name: 'float cost accepted',
+      url: '/api/generate',
+      change: 'body.costUsd = 0.0016;',
+      code: null,
+    },
+    {
+      name: 'missing cost',
+      url: '/api/generate',
+      change: 'delete body.costUsd;',
+      code: 'SMOKE_API_CONTRACT_FAILED',
+    },
+    {
+      name: 'negative cost',
+      url: '/api/generate',
+      change: 'body.costUsd = -1;',
+      code: 'SMOKE_API_CONTRACT_FAILED',
+    },
+    {
+      name: 'string cost',
+      url: '/api/generate',
+      change: 'body.costUsd = "1";',
+      code: 'SMOKE_API_CONTRACT_FAILED',
+    },
+    {
+      name: 'nonfinite cost from raw JSON',
+      url: '/api/generate',
+      change:
+        'done(null, JSON.stringify(body).replace(/"costUsd":null/, \'"costUsd":1e309\')); return;',
+      code: 'SMOKE_API_CONTRACT_FAILED',
+    },
     {
       name: 'health extra field',
       url: '/api/health',
@@ -831,9 +863,18 @@ test('smoke CLI rejects internal response contract drift', async (t) => {
         const result = await runSmokeCli(tempDir, ['--generate', '--model', 'test/model'], {
           env: getSanitizedEnv({ LLM_BASE_URL: stub.baseUrl, LLM_API_KEY: 'contract-test-key' }),
         });
-        assert.equal(result.exitCode, 1);
-        assert.equal(result.stdout, '');
-        assert.equal(result.stderr, JSON.stringify({ ok: false, code: c.code }) + '\n');
+        if (c.code === null) {
+          assert.equal(result.exitCode, 0);
+          assert.equal(result.stderr, '');
+          const output = JSON.parse(result.stdout);
+          assert.equal(output.ok, true);
+          assert.equal(Object.hasOwn(output, 'costUsd'), false);
+        } else {
+          assert.equal(result.exitCode, 1);
+          assert.equal(result.stdout, '');
+          assert.equal(result.stderr, JSON.stringify({ ok: false, code: c.code }) + '\n');
+        }
+
         assert.equal(posts, c.url === '/api/generate' ? 1 : 0);
       } finally {
         await stub.close();
