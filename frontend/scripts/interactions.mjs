@@ -58,21 +58,138 @@ await withBrowser(async (session) => {
   await page.getByText('Ждём ответ…').first().waitFor({ state: 'visible' });
   assert.equal(await page.getByText('Ждём ответ…').count(), 3);
   await stub.waitForActive(3);
+
+  // Composer button becomes Stop all when active
+  const stopAllBtn = page.getByRole('button', { name: 'Остановить генерацию', exact: true });
+  assert.equal(await stopAllBtn.count(), 1);
+  assert.equal(
+    await page.evaluate(() => {
+      const btn = document.querySelector('button[aria-describedby]');
+      return btn
+        ? document.getElementById(btn.getAttribute('aria-describedby'))?.textContent
+        : null;
+    }),
+    'Остановить все текущие ответы',
+  );
+
+  // Partial streaming and reasoning toggle
+  stub.sendPartialGenerate('claude-demo');
+  const claudeLastCell = page.locator('[data-testid^="cell-claude-demo-"]').last();
+  await claudeLastCell.getByText('Частичный ответ').waitFor({ state: 'visible' });
+  const claudeThoughtBtn = claudeLastCell.getByRole('button', { name: 'Рассуждения' });
+  assert.equal(await claudeThoughtBtn.count(), 1);
+  await claudeThoughtBtn.click();
+  assert.equal(await claudeThoughtBtn.getAttribute('aria-expanded'), 'true');
+
   stub.releaseGenerate();
   stub.setHoldGenerate(false);
-  await page.waitForFunction(() => !document.body.textContent.includes('Ждём ответ…'));
+  await page.waitForFunction(() => document.querySelectorAll('[aria-busy="true"]').length === 0);
   assert.equal(await page.locator('[class*="answersRow"]').count(), 2);
+  // Reasoning toggle remains expanded across stream completion
+  assert.equal(await claudeThoughtBtn.getAttribute('aria-expanded'), 'true');
+
+  // 2b. FE008 Stop single cell & Retry stopped cell
+  stub.setHoldGenerate(true);
+  await input.fill('Вопрос для проверки Stop ячейки');
+  await page.getByRole('button', { name: 'Отправить вопрос', exact: true }).click();
+  await stub.waitForActive(3);
+
+  expectRequestFailed('/api/stream');
+  const stopCell1 = page
+    .locator('[data-testid^="cell-claude-demo-"]')
+    .last()
+    .getByRole('button', { name: 'Остановить ответ: Claude Haiku 5.5' });
+  await stopCell1.focus();
+  const abortedBeforeCellStop = stub.counters.abortedRequests || 0;
+  stub.sendPartialGenerate('claude-demo');
+  await page
+    .locator('[data-testid^="cell-claude-demo-"]')
+    .last()
+    .getByText('Частичный ответ')
+    .waitFor();
+  await assertFocused(page, stopCell1);
+  await saveScreenshot(page, 'fe008-partial');
+  await stopCell1.click();
+
+  const stoppedCell = page.locator('[data-testid^="cell-claude-demo-"]').last();
+  await stoppedCell.getByText('Генерация остановлена.').waitFor({ state: 'visible' });
+  const retryStoppedBtn = stoppedCell.getByRole('button', { name: 'Повторить', exact: true });
+  assert.equal(await retryStoppedBtn.count(), 1);
+  // Focus was transferred from Stop to Retry
+  await assertFocused(page, retryStoppedBtn);
+  assert.equal(await stoppedCell.getByText('Частичный ответ').count(), 1);
+  await stoppedCell.getByRole('button', { name: 'Рассуждения' }).click();
+  await saveScreenshot(page, 'fe008-stopped-reasoning');
+  await stub.waitForActive(2);
+  assert.equal(stub.counters.abortedRequests, abortedBeforeCellStop + 1);
+
+  // Release the other 2 cells
+  stub.releaseGenerate();
+  stub.setHoldGenerate(false);
+  await page.waitForFunction(() => document.querySelectorAll('[aria-busy="true"]').length === 0);
+
+  // Retry the stopped cell
+  await retryStoppedBtn.click();
+  await page.waitForFunction(() => document.querySelectorAll('[aria-busy="true"]').length === 0);
+  assert.equal(await stoppedCell.getByText('Генерация остановлена.').count(), 0);
+  assert.equal(await stoppedCell.getByText(/Ответ Claude Haiku 5.5/).count(), 1);
+
+  // Stop all must close each active socket, keep partial content and preserve the draft.
+  stub.setHoldGenerate(true);
+  await input.fill('Stop all socket check');
+  await page.getByRole('button', { name: 'Отправить вопрос', exact: true }).click();
+  await stub.waitForActive(3);
+  stub.sendPartialGenerate();
+  await page.waitForFunction(
+    () => document.querySelectorAll('[aria-busy="true"] [class*="desktopContent"]').length === 3,
+  );
+  await input.fill('Несохранённый черновик');
+  const abortedBeforeAll = stub.counters.abortedRequests || 0;
+  for (let i = 0; i < 3; i++) expectRequestFailed('/api/stream');
+  await stopAllBtn.click();
+  await stub.waitForActive(0);
+  assert.equal(stub.counters.abortedRequests, abortedBeforeAll + 3);
+  assert.equal(await input.inputValue(), 'Несохранённый черновик');
+  await assertFocused(page, input);
+  const latestCells = page.locator('[class*="answersRow"]').last();
+  assert.equal(await latestCells.getByText('Частичный ответ').count(), 3);
+  assert.equal(await latestCells.getByText('Генерация остановлена.').count(), 3);
+  assert.equal(await latestCells.locator('[title^="Оценочная стоимость:"]').count(), 0);
+  stub.setHoldGenerate(false);
+
+  // HTTP429 and an in-band error both leave other model responses intact.
+  for (const inband of [false, true]) {
+    stub.setGenerateFault('giga-demo', {
+      status: 429,
+      inband,
+      partialText: 'Partial before failure',
+      body: { error: { code: 'UPSTREAM_LIMIT_EXCEEDED', message: 'raw-secret-error' } },
+    });
+    if (!inband) expectHttpError(429, '/api/stream');
+    await input.fill(`Fault mode ${inband}`);
+    await page.getByRole('button', { name: 'Отправить вопрос', exact: true }).click();
+    const failedCell = page.locator('[data-testid^="cell-giga-demo-"]').last();
+    await failedCell.getByText('Лимит запросов исчерпан.').waitFor();
+    await page.waitForFunction(() => document.querySelectorAll('[aria-busy="true"]').length === 0);
+    assert.equal(await failedCell.getByText('Partial before failure').count(), inband ? 1 : 0);
+    assert.equal(await page.getByText('raw-secret-error').count(), 0);
+    if (inband) {
+      await failedCell.scrollIntoViewIfNeeded();
+      await saveScreenshot(page, 'fe008-partial-error');
+    }
+    stub.clearFault('giga-demo');
+  }
 
   // 3. Error handling & Retry on single cell
   stub.setGenerateFault('giga-demo', {
     status: 504,
     body: { error: { code: 'UPSTREAM_TIMEOUT', message: 'Upstream gateway timeout' } },
   });
-  expectHttpError(504, '/api/generate');
+  expectHttpError(504, '/api/stream');
 
   await input.fill('Вопрос с ошибкой одной модели');
   await page.getByRole('button', { name: 'Отправить вопрос', exact: true }).click();
-  await page.waitForFunction(() => !document.body.textContent.includes('Ждём ответ…'));
+  await page.waitForFunction(() => document.querySelectorAll('[aria-busy="true"]').length === 0);
 
   const gigaCell = page.locator('[data-testid^="cell-giga-demo-"]').last();
   assert.equal(await gigaCell.getByText('Время ожидания истекло.').count(), 1);
@@ -82,7 +199,7 @@ await withBrowser(async (session) => {
   stub.clearFault('giga-demo');
   const beforeRetry = structuredClone(stub.counters);
   await retryBtn.click();
-  await page.waitForFunction(() => !document.body.textContent.includes('Ждём ответ…'));
+  await page.waitForFunction(() => document.querySelectorAll('[aria-busy="true"]').length === 0);
   assert.equal(await gigaCell.getByText('Время ожидания истекло.').count(), 0);
   assert.equal(await gigaCell.getByText(/Ответ GigaChat 2/).count(), 1);
   assert.equal(stub.counters.totalRequests, beforeRetry.totalRequests + 1);
@@ -96,9 +213,9 @@ await withBrowser(async (session) => {
   await page.getByText('Ждём ответ…').first().waitFor({ state: 'visible' });
   assert.equal(await page.getByText('Ждём ответ…').count(), 3);
 
-  expectRequestFailed('/api/generate');
-  expectRequestFailed('/api/generate');
-  expectRequestFailed('/api/generate');
+  expectRequestFailed('/api/stream');
+  expectRequestFailed('/api/stream');
+  expectRequestFailed('/api/stream');
 
   await page.getByRole('button', { name: 'Новое сравнение', exact: true }).click();
   await assertFocused(page, input);
@@ -163,7 +280,7 @@ await withBrowser(async (session) => {
   stub.releaseGenerate('claude-demo');
   await page.waitForFunction(() => document.body.textContent.split('Ждём ответ…').length - 1 === 3);
   stub.setHoldGenerate(false);
-  await page.waitForFunction(() => !document.body.textContent.includes('Ждём ответ…'));
+  await page.waitForFunction(() => document.querySelectorAll('[aria-busy="true"]').length === 0);
   assert.equal(await page.locator('[class*="answersRow"]').count(), 1);
   assert.equal(await page.locator('[data-testid^="cell-"]').count(), 4);
 
@@ -230,7 +347,7 @@ await withBrowser(async (session) => {
   await input.dispatchEvent('compositionend');
   await input.press('Enter');
   assert.equal(await input.inputValue(), '');
-  await page.waitForFunction(() => !document.body.textContent.includes('Ждём ответ…'));
+  await page.waitForFunction(() => document.querySelectorAll('[aria-busy="true"]').length === 0);
   assert.equal(await page.locator('[class*="answersRow"]').count(), 2);
 
   // 8. Share button: unsupported alert, clipboard untouched
@@ -290,6 +407,35 @@ await withBrowser(async (session) => {
   // Restore normal catalog
   stub.resetCatalog();
   await reset();
+  stub.setHoldGenerate(true);
+  const mathPrompt = String.raw`Tính \(\frac{4^x}{2^y}\) với $2x-y=3$.`;
+  await input.fill(mathPrompt);
+  await page.getByRole('button', { name: 'Отправить вопрос', exact: true }).click();
+  await stub.waitForActive(3);
+  const mathRow = page.locator('[class*="answersRow"]').last();
+  const mathStop = mathRow.getByRole('button', { name: 'Остановить ответ: Claude Haiku 5.5' });
+  const stopStyle = await mathStop.evaluate((node) => {
+    const style = getComputedStyle(node);
+    return {
+      height: node.getBoundingClientRect().height,
+      radius: style.borderRadius,
+      color: style.color,
+      iconFilter: getComputedStyle(node.querySelector('img')).filter,
+    };
+  });
+  assert.ok(stopStyle.height >= 32);
+  assert.equal(stopStyle.radius, '999px');
+  assert.equal(stopStyle.color, 'rgb(255, 255, 255)');
+  assert.equal(stopStyle.iconFilter, 'invert(1)');
+  assert.equal(await page.locator('[class*="questionBubbleWrapper"] .katex').count(), 2);
+  await mathStop.focus();
+  await saveScreenshot(page, 'fe008-stop-refined');
+  stub.setHoldGenerate(false);
+  await page.waitForFunction(() => document.querySelectorAll('[aria-busy="true"]').length === 0);
+  assert.ok((await mathRow.locator('.katex').count()) >= 6);
+  assert.equal(await mathRow.locator('pre .katex').count(), 0);
+  await saveScreenshot(page, 'fe008-math-rendered');
+  await reset();
   assert.equal(await page.locator('[class*="modelHeaderCell"]').count(), 3);
   // Two-model overlap also crosses the real Vite proxy into the stub.
   await page.getByRole('button', { name: /Удалить модель Yandex/ }).click();
@@ -298,7 +444,7 @@ await withBrowser(async (session) => {
   await page.getByRole('button', { name: 'Отправить вопрос', exact: true }).click();
   await stub.waitForActive(2);
   stub.setHoldGenerate(false);
-  await page.waitForFunction(() => !document.body.textContent.includes('Ждём ответ…'));
+  await page.waitForFunction(() => document.querySelectorAll('[aria-busy="true"]').length === 0);
   // FE007: anchored picker, offline inline icons and constrained viewport.
   await add.click();
   const bounds = await dialog.boundingBox();

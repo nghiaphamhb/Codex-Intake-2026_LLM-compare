@@ -313,4 +313,45 @@ describe('PromptForm sizing regressions', () => {
     await user.type(textarea, 'a');
     expect(handleValueChange).toHaveBeenCalled();
   });
+
+  it('renders Stop button with aria-describedby when busy and stopDescription provided', () => {
+    const handleStop = vi.fn();
+    render(
+      <PromptForm
+        value="Draft prompt"
+        onValueChange={() => {}}
+        busy={true}
+        onSend={() => {}}
+        onStop={handleStop}
+        stopDescription="Остановить все текущие ответы"
+      />,
+    );
+
+    const stopBtn = screen.getByRole('button', { name: 'Остановить генерацию' });
+    expect(stopBtn).toBeInTheDocument();
+    expect(stopBtn).toHaveAttribute('aria-describedby');
+    const descId = stopBtn.getAttribute('aria-describedby');
+    expect(descId).toBeTruthy();
+    const descEl = document.getElementById(descId!);
+    expect(descEl).toHaveTextContent('Остановить все текущие ответы');
+
+    fireEvent.click(stopBtn);
+    expect(handleStop).toHaveBeenCalled();
+  });
+
+  it('renders Stop button without aria-describedby when busy without stopDescription', () => {
+    render(
+      <PromptForm
+        value="Draft prompt"
+        onValueChange={() => {}}
+        busy={true}
+        onSend={() => {}}
+        onStop={() => {}}
+      />,
+    );
+
+    const stopBtn = screen.getByRole('button', { name: 'Остановить генерацию' });
+    expect(stopBtn).toBeInTheDocument();
+    expect(stopBtn).not.toHaveAttribute('aria-describedby');
+  });
 });

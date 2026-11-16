@@ -16,6 +16,7 @@ export type PromptFormProps = {
   disabled?: boolean;
   onSend: (prompt: string) => void;
   onStop: () => void;
+  stopDescription?: string;
   inputRef?: RefObject<HTMLTextAreaElement | null>;
   error?: string;
 };
@@ -27,6 +28,7 @@ export function PromptForm({
   disabled = false,
   onSend,
   onStop,
+  stopDescription,
   inputRef,
   error,
 }: PromptFormProps) {
@@ -35,6 +37,7 @@ export function PromptForm({
   const isComposingRef = useRef(false);
   const inputId = useId();
   const errorId = `${inputId}-error`;
+  const stopDescId = useId();
 
   useLayoutEffect(() => {
     const textarea = textareaRef.current;
@@ -122,13 +125,21 @@ export function PromptForm({
         />
         <div className={styles.actionButton}>
           {busy ? (
-            <IconButton
-              className={styles.sendButton}
-              type="button"
-              label="Остановить генерацию"
-              iconSrc="/assets/icons/stop.svg"
-              onClick={onStop}
-            />
+            <>
+              {stopDescription && (
+                <span id={stopDescId} className={styles.visuallyHidden}>
+                  {stopDescription}
+                </span>
+              )}
+              <IconButton
+                className={styles.sendButton}
+                type="button"
+                label="Остановить генерацию"
+                iconSrc="/assets/icons/stop.svg"
+                onClick={onStop}
+                aria-describedby={stopDescription ? stopDescId : undefined}
+              />
+            </>
           ) : (
             <IconButton
               className={styles.sendButton}

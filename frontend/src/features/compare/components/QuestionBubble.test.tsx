@@ -27,3 +27,12 @@ describe('QuestionBubble', () => {
     expect(container.textContent).toBe(multiLine);
   });
 });
+
+it('renders math in a question while preserving ordinary text and code literally', () => {
+  const text = String.raw`**Question**: \(\frac{4^x}{2^y}\) and ` + '`$code$`';
+  const { container } = render(<QuestionBubble text={text} />);
+  expect(container.querySelector('.katex')).not.toBeNull();
+  expect(container.textContent).toContain('**Question**: ');
+  expect(container.textContent).toContain('`$code$`');
+  expect(container.querySelector('strong')).toBeNull();
+});

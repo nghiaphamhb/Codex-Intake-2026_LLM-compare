@@ -68,6 +68,13 @@ export function CompareGrid({ models, turns, onAction, className }: CompareGridP
                         modelId: model.id,
                       })
                     }
+                    onStop={() =>
+                      onAction({
+                        type: 'stop',
+                        turnId: turn.id,
+                        modelId: model.id,
+                      })
+                    }
                     className={colIdx > 0 ? styles.cellWithBorder : undefined}
                   />
                 ))}

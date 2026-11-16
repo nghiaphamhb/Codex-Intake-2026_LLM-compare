@@ -3,12 +3,14 @@ import type { FastifyInstance } from 'fastify';
 import { configuredModels, validateModels, type Model } from './models.js';
 import { registerModelRoutes } from './routes/models.js';
 import { registerGenerateRoutes } from './routes/generate.js';
-import type { Generate } from './aiProxy.js';
+import { registerStreamRoutes } from './routes/stream.js';
+import type { Generate, StreamGenerate } from './aiProxy.js';
 
 export interface BuildAppOptions {
   logger?: boolean;
   models?: readonly Model[];
   generate?: Generate;
+  streamGenerate?: StreamGenerate;
 }
 
 export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
@@ -110,6 +112,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 
   registerModelRoutes(app, modelsSnapshot);
   registerGenerateRoutes(app, modelsSnapshot, options.generate);
+  registerStreamRoutes(app, modelsSnapshot, options.streamGenerate);
 
   return app;
 }

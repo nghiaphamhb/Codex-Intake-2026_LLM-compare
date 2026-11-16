@@ -62,7 +62,7 @@ function mapStatusToFallbackCode(status: number): ComparisonApiErrorCode {
   return 'UPSTREAM_ERROR';
 }
 
-async function handleHttpError(response: Response, signal: AbortSignal): Promise<never> {
+export async function handleHttpError(response: Response, signal: AbortSignal): Promise<never> {
   try {
     const json = await response.json();
     if (isPlainRecord(json) && isPlainRecord(json.error)) {

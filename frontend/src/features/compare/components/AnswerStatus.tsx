@@ -2,11 +2,13 @@ import styles from './AnswerStatus.module.css';
 
 export type AnswerStatusProps = {
   state: 'waiting' | 'generating';
+  label?: string;
 };
 
-export function AnswerStatus({ state }: AnswerStatusProps) {
+export function AnswerStatus({ state, label: customLabel }: AnswerStatusProps) {
   const isWaiting = state === 'waiting';
-  const label = isWaiting ? 'Ждём ответ…' : 'Печатает…';
+  const defaultLabel = isWaiting ? 'Ждём ответ…' : 'Печатает…';
+  const label = customLabel ?? defaultLabel;
 
   return (
     <div className={styles.container}>
@@ -24,4 +26,3 @@ export function AnswerStatus({ state }: AnswerStatusProps) {
     </div>
   );
 }
-

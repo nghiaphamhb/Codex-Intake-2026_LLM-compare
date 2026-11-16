@@ -5,6 +5,51 @@ import { AnswerCell } from './AnswerCell';
 import type { CompareModel, ResultAnswer } from '../types';
 
 describe('AnswerCell', () => {
+  it('keeps the focused Stop button mounted when the first delta arrives', () => {
+    const props = {
+      model: { id: 'm', name: 'Model', provider: 'Test' },
+      turnId: 't',
+      onRetry: vi.fn(),
+      onStop: vi.fn(),
+    };
+    const { rerender } = render(
+      <AnswerCell {...props} answer={{ state: 'pending', requestId: 'r' }} />,
+    );
+    const stop = screen.getByRole('button', { name: 'Остановить ответ: Model' });
+    stop.focus();
+    rerender(
+      <AnswerCell
+        {...props}
+        answer={{ state: 'streaming', requestId: 'r', markdown: 'partial', reasoning: '' }}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Остановить ответ: Model' })).toBe(stop);
+    expect(stop).toHaveFocus();
+  });
+
+  it.each(['stopped', 'error'] as const)(
+    'focuses Retry, not the reasoning toggle, after %s',
+    (state) => {
+      const props = {
+        model: { id: 'm', name: 'Model', provider: 'Test' },
+        turnId: 't',
+        onRetry: vi.fn(),
+        onStop: vi.fn(),
+      };
+      const content = { requestId: 'r', markdown: 'partial', reasoning: 'actual reasoning' };
+      const { rerender } = render(
+        <AnswerCell {...props} answer={{ state: 'streaming', ...content }} />,
+      );
+      screen.getByRole('button', { name: 'Остановить ответ: Model' }).focus();
+      rerender(
+        <AnswerCell
+          {...props}
+          answer={{ state, ...content, message: 'failure', description: 'Retry later' }}
+        />,
+      );
+      expect(screen.getByRole('button', { name: 'Повторить' })).toHaveFocus();
+    },
+  );
   const model: CompareModel = {
     id: 'claude-demo',
     name: 'Claude Haiku 5.5',
@@ -126,5 +171,177 @@ describe('AnswerCell', () => {
     expect(emptyCell).toBeInTheDocument();
     expect(emptyCell).toHaveTextContent('Модель добавлена после этого вопроса.');
     expect(screen.queryByRole('button')).toBeNull();
+  });
+
+  it('renders pending state with Stop button and aria-busy=true', async () => {
+    const user = userEvent.setup();
+    const onStop = vi.fn();
+    render(
+      <AnswerCell
+        model={model}
+        turnId="turn-1"
+        answer={{ state: 'pending', requestId: 'req-1' }}
+        onRetry={vi.fn()}
+        onStop={onStop}
+      />,
+    );
+
+    const cell = screen.getByTestId('cell-claude-demo-turn-1');
+    expect(cell).toHaveAttribute('aria-busy', 'true');
+
+    const stopBtn = screen.getByRole('button', { name: 'Остановить ответ: Claude Haiku 5.5' });
+    expect(stopBtn).toBeInTheDocument();
+    await user.click(stopBtn);
+    expect(onStop).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders streaming state with partial markdown, reasoning toggle, and Stop button', () => {
+    render(
+      <AnswerCell
+        model={model}
+        turnId="turn-1"
+        answer={{
+          state: 'streaming',
+          requestId: 'req-1',
+          markdown: 'Partial **answer**',
+          reasoning: 'Deep thoughts...',
+        }}
+        onRetry={vi.fn()}
+        onStop={vi.fn()}
+      />,
+    );
+
+    const cell = screen.getByTestId('cell-claude-demo-turn-1');
+    expect(cell).toHaveAttribute('aria-busy', 'true');
+
+    // Thought status with live label 'Рассуждения'
+    expect(screen.getByRole('button', { name: 'Рассуждения' })).toBeInTheDocument();
+
+    // Partial markdown
+    expect(screen.getByText('answer')).toBeInTheDocument();
+
+    // Generating status
+    expect(screen.getByText('Печатает…')).toBeInTheDocument();
+
+    // Stop button
+    expect(
+      screen.getByRole('button', { name: 'Остановить ответ: Claude Haiku 5.5' }),
+    ).toBeInTheDocument();
+  });
+
+  it('renders reasoning-only streaming state with Получаем ответ… status', () => {
+    render(
+      <AnswerCell
+        model={model}
+        turnId="turn-1"
+        answer={{
+          state: 'streaming',
+          requestId: 'req-1',
+          markdown: '',
+          reasoning: 'Reasoning only...',
+        }}
+        onRetry={vi.fn()}
+        onStop={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('Получаем ответ…')).toBeInTheDocument();
+    expect(screen.queryByText('Печатает…')).toBeNull();
+  });
+
+  it('renders stopped state with partial content, status label, and Retry button', async () => {
+    const user = userEvent.setup();
+    const onRetry = vi.fn();
+
+    render(
+      <AnswerCell
+        model={model}
+        turnId="turn-1"
+        answer={{
+          state: 'stopped',
+          requestId: 'req-1',
+          markdown: 'Cut off answer',
+          reasoning: 'Prior thoughts',
+        }}
+        onRetry={onRetry}
+      />,
+    );
+
+    const cell = screen.getByTestId('cell-claude-demo-turn-1');
+    expect(cell).toHaveAttribute('aria-busy', 'false');
+
+    expect(screen.getByRole('button', { name: 'Рассуждения' })).toBeInTheDocument();
+    expect(screen.getByText('Cut off answer')).toBeInTheDocument();
+
+    expect(screen.getByText('Генерация остановлена.')).toBeInTheDocument();
+
+    const retryBtn = screen.getByRole('button', { name: 'Повторить' });
+    expect(retryBtn).toBeInTheDocument();
+    await user.click(retryBtn);
+    expect(onRetry).toHaveBeenCalledTimes(1);
+
+    // No Stop button and no metadata in stopped state
+    expect(screen.queryByRole('button', { name: /остановить/i })).toBeNull();
+    expect(screen.queryByText(/·/)).toBeNull();
+  });
+
+  it('renders error state with partial markdown and reasoning retained above AnswerError', () => {
+    render(
+      <AnswerCell
+        model={model}
+        turnId="turn-1"
+        answer={{
+          state: 'error',
+          requestId: 'req-1',
+          message: 'Error message',
+          description: 'Try later',
+          markdown: 'Partial markdown before crash',
+          reasoning: 'Partial reasoning before crash',
+        }}
+        onRetry={vi.fn()}
+      />,
+    );
+
+    const cell = screen.getByTestId('cell-claude-demo-turn-1');
+    expect(cell).toHaveAttribute('aria-busy', 'false');
+
+    expect(screen.getByRole('button', { name: 'Рассуждения' })).toBeInTheDocument();
+    expect(screen.getByText('Partial markdown before crash')).toBeInTheDocument();
+    expect(screen.getByText('Error message')).toBeInTheDocument();
+  });
+
+  it('transfers focus from Stop button to Retry button when transitioning to stopped', () => {
+    const { rerender } = render(
+      <AnswerCell
+        model={model}
+        turnId="turn-1"
+        answer={{ state: 'pending', requestId: 'req-1' }}
+        onRetry={vi.fn()}
+        onStop={vi.fn()}
+      />,
+    );
+
+    const stopBtn = screen.getByRole('button', { name: 'Остановить ответ: Claude Haiku 5.5' });
+    stopBtn.focus();
+    expect(document.activeElement).toBe(stopBtn);
+
+    // Transition to stopped
+    rerender(
+      <AnswerCell
+        model={model}
+        turnId="turn-1"
+        answer={{
+          state: 'stopped',
+          requestId: 'req-1',
+          markdown: 'Partial',
+          reasoning: '',
+        }}
+        onRetry={vi.fn()}
+        onStop={vi.fn()}
+      />,
+    );
+
+    const retryBtn = screen.getByRole('button', { name: 'Повторить' });
+    expect(document.activeElement).toBe(retryBtn);
   });
 });

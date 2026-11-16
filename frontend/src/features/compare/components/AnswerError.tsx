@@ -42,7 +42,7 @@ export function AnswerError({
       <div className={styles.message}>{message}</div>
       {description && <p className={styles.description}>{description}</p>}
       <div className={styles.actions}>
-        <Button variant="secondary" onClick={onRetry} disabled={retryDisabled}>
+        <Button variant="secondary" onClick={onRetry} disabled={retryDisabled} data-action="retry">
           <svg
             className={styles.retryIcon}
             width="16"
