@@ -4,7 +4,7 @@ So sánh câu trả lời của nhiều model cạnh nhau. Frontend dùng React/
 
 ## Trạng thái hiện tại
 
-FE006 đã nối trang so sánh với API backend: catalog thật, 2–4 request độc lập, trạng thái chờ/kết quả/lỗi, Retry từng ô và New. Reload mở hội thoại rỗng; fixture chỉ dùng cho test/showcase. Đã kiểm tra local bằng HTTP stub qua Vite proxy, **chưa nghiệm thu browser → BTC thật**. Backend từng smoke live thành công với catalog 10 model và một GPT-5 mini ngày 2026-11-13. BE007 đã bổ sung costUsd vào API backend; FE007 đã hiển thị thời gian · chi phí ước tính (không token) và sửa hộp thêm model theo ảnh tham chiếu. Chưa có streaming/Stop, reasoning thật, persistence hoặc Share khôi phục dữ liệu.
+FE006 đã nối trang so sánh với API backend: catalog thật, 2–4 request độc lập, trạng thái chờ/kết quả/lỗi, Retry từng ô và New. Reload mở hội thoại rỗng; fixture chỉ dùng cho test/showcase. Đã kiểm tra local bằng HTTP stub qua Vite proxy, **chưa nghiệm thu browser → BTC thật**. Backend từng smoke live thành công với catalog 10 model và một GPT-5 mini ngày 2026-11-13. BE007 đã bổ sung costUsd vào API backend; FE007 đã hiển thị thời gian · chi phí ước tính (không token) và sửa hộp thêm model theo ảnh tham chiếu. BE008 đã có backend streaming/reasoning/hủy kết nối, triển khai và review local ngày 2026-11-16; FE008 đã triển khai và review local/stub: hiển thị streaming, Stop từng ô/toàn bộ và reasoning khi backend cung cấp; chưa nghiệm thu browser→backend BE008 hoặc BTC thật. Chưa có persistence hoặc Share khôi phục dữ liệu.
 
 ## Cài đặt và chạy
 
@@ -93,9 +93,15 @@ Hoặc từ thư mục `backend/`: `npm run smoke:proxy` và `npm run smoke:prox
 - [FE005 — Tương tác và lịch sử nghiệm thu](specs/FE005-comparison-interactions.md)
 - [Pattern viết spec](specs/F000-pattern.md) · [Quy tắc làm việc](AGENTS.md)
 
-Thứ tự tiếp theo: **BE008/FE008** streaming, Stop và reasoning khi có → **FE009** mobile → **BE009/FE010** nghiệm thu/bàn giao. BE006 đã có CLI và kiểm thử local; FE006 đã triển khai và kiểm tra offline. BE007 đã triển khai backend; FE007 đã triển khai và nghiệm thu local. BE008–BE009 và FE008–FE010 chưa soạn. Fixture mô phỏng tiếp tục phục vụ test; chưa nghiệm thu frontend với BTC thật.
+Thứ tự tiếp theo: **FE008** nối backend BE008 cho streaming, Stop và reasoning khi có → **FE009** mobile → **BE009/FE010** nghiệm thu/bàn giao. BE006 đã có CLI và kiểm thử local; FE006 đã triển khai và kiểm tra offline. BE007 đã triển khai backend; FE007 đã triển khai và nghiệm thu local. BE008 đã triển khai/review local; FE008 đã triển khai/review local với HTTP stub; BE009 và FE009–FE010 chưa soạn. Fixture mô phỏng tiếp tục phục vụ test; chưa nghiệm thu frontend với BTC thật.
 
 Contract tham chiếu: [repo BTC](https://github.com/codex-team/ai-proxy) và [OpenAPI live](https://llm.codex.so/docs/json), đối chiếu 2026-11-13. Giá USD/triệu token và usage không đồng nghĩa quota của key; chi phí hiển thị sau này chỉ là ước tính.
+
+## Streaming backend (BE008)
+
+`POST /api/stream` nhận JSON `{ prompt, modelId }`, trả `application/x-ndjson`: `start` có modelId, các `text-delta`/`reasoning-delta` có delta, rồi `done` có durationMs/costUsd hoặc `error` có error.code/message. Trước khi mở stream, lỗi vẫn dùng HTTP status và JSON envelope. EOF thiếu terminal không phải thành công. Không trả token/usage/pricing; `/api/generate` JSON vẫn giữ nguyên.
+
+Backend ngừng đọc/kết nối upstream khi downstream đóng sớm, có deadline tổng và backpressure. Việc này không bảo đảm provider dừng tính toán/tính phí hoặc hoàn quota. Đã kiểm tra local bằng HTTP stub, gồm socket incremental/abort/overlap2–4 và startup; chưa gọi BTC stream thật; UI FE008 đã kiểm tra riêng qua HTTP stub. Contract, giới hạn và kết quả review nằm trong [BE008](specs/BE008-streaming.md); kế hoạch UI trong [FE008](specs/FE008-streaming.md).
 
 ## Chi phí ước tính backend (BE007)
 

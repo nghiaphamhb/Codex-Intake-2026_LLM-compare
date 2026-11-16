@@ -6,12 +6,8 @@ import {
   createInitialComparisonState,
   validatePrompt,
 } from './comparisonState.js';
-import {
-  fetchModels,
-  generateAnswer,
-  ComparisonApiError,
-  type ComparisonApiErrorCode,
-} from './comparisonApi.js';
+import { fetchModels, ComparisonApiError, type ComparisonApiErrorCode } from './comparisonApi.js';
+import { streamAnswer } from './comparisonStream.js';
 import { CompareTopBar } from './components/CompareTopBar.js';
 import { CompareGrid } from './components/CompareGrid.js';
 import { AddModelColumn } from './components/AddModelColumn.js';
@@ -109,6 +105,44 @@ export function ComparePage() {
     setCatalogReloadCount((c) => c + 1);
   };
 
+  const isAnyCellActive = state.turns.some((turn) =>
+    state.models.some((model) => {
+      const ans = turn.answers[model.id];
+      return ans && (ans.state === 'pending' || ans.state === 'streaming');
+    }),
+  );
+
+  const handleStopCell = useCallback((turnId: string, modelId: string) => {
+    const cellKey = JSON.stringify([turnId, modelId]);
+    const requestId = inFlightByCellRef.current.get(cellKey);
+    if (!requestId) return;
+
+    inFlightByCellRef.current.delete(cellKey);
+    dispatch({ type: 'stop', turnId, modelId, requestId });
+
+    const controller = abortControllersRef.current.get(requestId);
+    if (controller) {
+      controller.abort();
+      abortControllersRef.current.delete(requestId);
+    }
+  }, []);
+
+  const handleStopAll = useCallback(() => {
+    const snapshot = Array.from(inFlightByCellRef.current.entries());
+    inFlightByCellRef.current.clear();
+
+    for (const [cellKey, requestId] of snapshot) {
+      const [turnId, modelId] = JSON.parse(cellKey) as [string, string];
+      dispatch({ type: 'stop', turnId, modelId, requestId });
+      const controller = abortControllersRef.current.get(requestId);
+      if (controller) {
+        controller.abort();
+        abortControllersRef.current.delete(requestId);
+      }
+    }
+    promptInputRef.current?.focus();
+  }, []);
+
   const runGeneration = useCallback(
     async (turnId: string, modelId: string, prompt: string, requestId: string) => {
       const cellKey = JSON.stringify([turnId, modelId]);
@@ -117,12 +151,23 @@ export function ComparePage() {
       inFlightByCellRef.current.set(cellKey, requestId);
 
       try {
-        const result = await generateAnswer({ prompt, modelId }, controller.signal);
-        if (!isMountedRef.current || controller.signal.aborted) return;
+        const result = await streamAnswer({ prompt, modelId }, controller.signal, (deltaEvent) => {
+          if (!isMountedRef.current || controller.signal.aborted) return;
+          if (inFlightByCellRef.current.get(cellKey) !== requestId) return;
 
-        if (inFlightByCellRef.current.get(cellKey) === requestId) {
-          inFlightByCellRef.current.delete(cellKey);
-        }
+          dispatch({
+            type: 'stream-delta',
+            turnId,
+            modelId,
+            requestId,
+            event: deltaEvent,
+          });
+        });
+
+        if (!isMountedRef.current || controller.signal.aborted) return;
+        if (inFlightByCellRef.current.get(cellKey) !== requestId) return;
+
+        inFlightByCellRef.current.delete(cellKey);
 
         const durationSeconds = result.durationMs / 1000;
         const durationLabel =
@@ -133,11 +178,10 @@ export function ComparePage() {
           turnId,
           modelId,
           requestId,
-          answer: {
+          result: {
             state: 'success',
-            markdown: result.text,
-            costLabel: formatCostUsd(result.costUsd),
             durationLabel,
+            costLabel: formatCostUsd(result.costUsd),
           },
         });
       } catch (err: unknown) {
@@ -145,9 +189,11 @@ export function ComparePage() {
           return;
         }
 
-        if (inFlightByCellRef.current.get(cellKey) === requestId) {
-          inFlightByCellRef.current.delete(cellKey);
+        if (inFlightByCellRef.current.get(cellKey) !== requestId) {
+          return;
         }
+
+        inFlightByCellRef.current.delete(cellKey);
 
         const errorCode = err instanceof ComparisonApiError ? err.code : 'UPSTREAM_ERROR';
         const message = mapErrorCodeToMessage(errorCode);
@@ -157,7 +203,7 @@ export function ComparePage() {
           turnId,
           modelId,
           requestId,
-          answer: {
+          result: {
             state: 'error',
             message,
             description: 'Повторите запрос позже.',
@@ -167,12 +213,19 @@ export function ComparePage() {
         if (abortControllersRef.current.get(requestId) === controller) {
           abortControllersRef.current.delete(requestId);
         }
+        if (inFlightByCellRef.current.get(cellKey) === requestId) {
+          inFlightByCellRef.current.delete(cellKey);
+        }
       }
     },
     [],
   );
 
   const handleSend = (prompt: string) => {
+    if (isAnyCellActive || inFlightByCellRef.current.size > 0) {
+      return;
+    }
+
     const error = validatePrompt(prompt);
     if (error) {
       setPromptError(error);
@@ -261,7 +314,7 @@ export function ComparePage() {
         }
 
         const targetAnswer = targetTurn.answers[action.modelId];
-        if (!targetAnswer || targetAnswer.state !== 'error') {
+        if (!targetAnswer || (targetAnswer.state !== 'error' && targetAnswer.state !== 'stopped')) {
           return;
         }
 
@@ -276,6 +329,10 @@ export function ComparePage() {
         });
 
         void runGeneration(action.turnId, action.modelId, targetTurn.question, requestId);
+        break;
+      }
+      case 'stop': {
+        handleStopCell(action.turnId, action.modelId);
         break;
       }
       case 'send': {
@@ -366,10 +423,11 @@ export function ComparePage() {
                 setPromptError('');
                 if (statusMessage) setStatusMessage('');
               }}
-              busy={false}
+              busy={isAnyCellActive}
               disabled={isPromptDisabled}
               onSend={handleSend}
-              onStop={() => {}}
+              onStop={handleStopAll}
+              stopDescription="Остановить все текущие ответы"
               inputRef={promptInputRef}
               error={promptError}
             />

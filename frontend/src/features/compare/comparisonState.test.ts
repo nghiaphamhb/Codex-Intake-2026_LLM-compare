@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { CompareModel, ResultAnswer } from './types.js';
+import type { CompareModel } from './types.js';
 import {
   comparisonReducer,
   createInitialComparisonState,
@@ -254,24 +254,23 @@ describe('comparisonState', () => {
         }),
       );
 
-      const resolvedAnswer: Exclude<ResultAnswer, { state: 'pending' }> = {
-        state: 'success',
-        markdown: 'GPT answer',
-        durationLabel: '1,2 с',
-      };
-
       const nextState = comparisonReducer(state, {
         type: 'resolve',
         turnId: 'turn-1',
         modelId: 'openai/gpt-5-mini',
         requestId: 'req-1',
-        answer: resolvedAnswer,
+        result: {
+          state: 'success',
+          durationLabel: '1,2 с',
+        },
       });
 
       expect(nextState.turns[0].answers['openai/gpt-5-mini']).toEqual({
         state: 'success',
-        markdown: 'GPT answer',
+        markdown: '',
         durationLabel: '1,2 с',
+        costLabel: undefined,
+        thought: undefined,
         requestId: 'req-1',
       });
       // Other models remain pending
@@ -298,9 +297,8 @@ describe('comparisonState', () => {
         turnId: 'turn-1',
         modelId: 'openai/gpt-5-mini',
         requestId: 'wrong-req-id',
-        answer: {
+        result: {
           state: 'success',
-          markdown: 'Late GPT answer',
           durationLabel: '1,2 с',
         },
       });
@@ -327,9 +325,8 @@ describe('comparisonState', () => {
             turnId: 'turn-1',
             modelId: 'openai/gpt-5-mini',
             requestId: 'req-1',
-            answer: {
+            result: {
               state: 'success',
-              markdown: 'First answer',
               durationLabel: '1,0 с',
             },
           },
@@ -341,27 +338,111 @@ describe('comparisonState', () => {
         turnId: 'turn-1',
         modelId: 'openai/gpt-5-mini',
         requestId: 'req-1',
-        answer: {
+        result: {
           state: 'success',
-          markdown: 'Second answer attempting overwrite',
           durationLabel: '2,0 с',
         },
       });
 
       expect(nextState).toBe(stateWithResolved);
       expect(
-        (nextState.turns[0].answers['openai/gpt-5-mini'] as { markdown?: string })?.markdown,
-      ).toBe('First answer');
+        (nextState.turns[0].answers['openai/gpt-5-mini'] as { durationLabel?: string })
+          ?.durationLabel,
+      ).toBe('1,0 с');
     });
 
-    it('retries only error answers, sets them to pending with new requestId, and keeps others unchanged', () => {
-      // Setup turn where claude has an error
-      const stateWithError = deepFreeze(
+    it('accumulates stream-delta into streaming state separately for text and reasoning', () => {
+      const state = deepFreeze(
+        comparisonReducer(setupReadyState(), {
+          type: 'send',
+          turnId: 'turn-1',
+          prompt: 'prompt',
+          requests: {
+            'openai/gpt-5-mini': 'req-1',
+            'anthropic/claude-3-haiku': 'req-2',
+            'google/gemini-2.5-flash': 'req-3',
+          },
+        }),
+      );
+
+      // Delta 1: text-delta into pending -> transitions to streaming
+      const s1 = comparisonReducer(state, {
+        type: 'stream-delta',
+        turnId: 'turn-1',
+        modelId: 'openai/gpt-5-mini',
+        requestId: 'req-1',
+        event: { type: 'text-delta', delta: 'Hello ' },
+      });
+
+      expect(s1.turns[0].answers['openai/gpt-5-mini']).toEqual({
+        state: 'streaming',
+        requestId: 'req-1',
+        markdown: 'Hello ',
+        reasoning: '',
+      });
+
+      // Delta 2: reasoning-delta into streaming
+      const s2 = comparisonReducer(s1, {
+        type: 'stream-delta',
+        turnId: 'turn-1',
+        modelId: 'openai/gpt-5-mini',
+        requestId: 'req-1',
+        event: { type: 'reasoning-delta', delta: 'Thinking...' },
+      });
+
+      expect(s2.turns[0].answers['openai/gpt-5-mini']).toEqual({
+        state: 'streaming',
+        requestId: 'req-1',
+        markdown: 'Hello ',
+        reasoning: 'Thinking...',
+      });
+
+      // Delta 3: more text-delta
+      const s3 = comparisonReducer(s2, {
+        type: 'stream-delta',
+        turnId: 'turn-1',
+        modelId: 'openai/gpt-5-mini',
+        requestId: 'req-1',
+        event: { type: 'text-delta', delta: 'World!' },
+      });
+
+      expect(s3.turns[0].answers['openai/gpt-5-mini']).toEqual({
+        state: 'streaming',
+        requestId: 'req-1',
+        markdown: 'Hello World!',
+        reasoning: 'Thinking...',
+      });
+
+      // Resolve success retains accumulated text and converts reasoning to thought.text without durationSeconds
+      const sFinal = comparisonReducer(s3, {
+        type: 'resolve',
+        turnId: 'turn-1',
+        modelId: 'openai/gpt-5-mini',
+        requestId: 'req-1',
+        result: {
+          state: 'success',
+          durationLabel: '2,5 с',
+          costLabel: '$0,0010',
+        },
+      });
+
+      expect(sFinal.turns[0].answers['openai/gpt-5-mini']).toEqual({
+        state: 'success',
+        requestId: 'req-1',
+        markdown: 'Hello World!',
+        durationLabel: '2,5 с',
+        costLabel: '$0,0010',
+        thought: { text: 'Thinking...' },
+      });
+    });
+
+    it('transitions active to stopped preserving partial markdown and reasoning', () => {
+      const state = deepFreeze(
         comparisonReducer(
           comparisonReducer(setupReadyState(), {
             type: 'send',
             turnId: 'turn-1',
-            prompt: 'question',
+            prompt: 'prompt',
             requests: {
               'openai/gpt-5-mini': 'req-1',
               'anthropic/claude-3-haiku': 'req-2',
@@ -369,11 +450,150 @@ describe('comparisonState', () => {
             },
           }),
           {
+            type: 'stream-delta',
+            turnId: 'turn-1',
+            modelId: 'openai/gpt-5-mini',
+            requestId: 'req-1',
+            event: { type: 'text-delta', delta: 'Partial text' },
+          },
+        ),
+      );
+
+      const stoppedState = comparisonReducer(state, {
+        type: 'stop',
+        turnId: 'turn-1',
+        modelId: 'openai/gpt-5-mini',
+        requestId: 'req-1',
+      });
+
+      expect(stoppedState.turns[0].answers['openai/gpt-5-mini']).toEqual({
+        state: 'stopped',
+        requestId: 'req-1',
+        markdown: 'Partial text',
+        reasoning: '',
+      });
+
+      // Late delta or late resolve on stopped state is a no-op
+      const lateDelta = comparisonReducer(stoppedState, {
+        type: 'stream-delta',
+        turnId: 'turn-1',
+        modelId: 'openai/gpt-5-mini',
+        requestId: 'req-1',
+        event: { type: 'text-delta', delta: ' late' },
+      });
+      expect(lateDelta).toBe(stoppedState);
+
+      const lateResolve = comparisonReducer(stoppedState, {
+        type: 'resolve',
+        turnId: 'turn-1',
+        modelId: 'openai/gpt-5-mini',
+        requestId: 'req-1',
+        result: { state: 'success', durationLabel: '1 с' },
+      });
+      expect(lateResolve).toBe(stoppedState);
+    });
+
+    it('transitions pending to stopped with empty markdown and reasoning', () => {
+      const state = deepFreeze(
+        comparisonReducer(setupReadyState(), {
+          type: 'send',
+          turnId: 'turn-1',
+          prompt: 'prompt',
+          requests: {
+            'openai/gpt-5-mini': 'req-1',
+            'anthropic/claude-3-haiku': 'req-2',
+            'google/gemini-2.5-flash': 'req-3',
+          },
+        }),
+      );
+
+      const stoppedState = comparisonReducer(state, {
+        type: 'stop',
+        turnId: 'turn-1',
+        modelId: 'openai/gpt-5-mini',
+        requestId: 'req-1',
+      });
+
+      expect(stoppedState.turns[0].answers['openai/gpt-5-mini']).toEqual({
+        state: 'stopped',
+        requestId: 'req-1',
+        markdown: '',
+        reasoning: '',
+      });
+    });
+
+    it('preserves partial content on resolve error from streaming state', () => {
+      const state = deepFreeze(
+        comparisonReducer(
+          comparisonReducer(setupReadyState(), {
+            type: 'send',
+            turnId: 'turn-1',
+            prompt: 'prompt',
+            requests: {
+              'openai/gpt-5-mini': 'req-1',
+              'anthropic/claude-3-haiku': 'req-2',
+              'google/gemini-2.5-flash': 'req-3',
+            },
+          }),
+          {
+            type: 'stream-delta',
+            turnId: 'turn-1',
+            modelId: 'openai/gpt-5-mini',
+            requestId: 'req-1',
+            event: { type: 'text-delta', delta: 'Some partial work before failure' },
+          },
+        ),
+      );
+
+      const errorState = comparisonReducer(state, {
+        type: 'resolve',
+        turnId: 'turn-1',
+        modelId: 'openai/gpt-5-mini',
+        requestId: 'req-1',
+        result: {
+          state: 'error',
+          message: 'Server error',
+          description: 'Try later',
+        },
+      });
+
+      expect(errorState.turns[0].answers['openai/gpt-5-mini']).toEqual({
+        state: 'error',
+        requestId: 'req-1',
+        message: 'Server error',
+        description: 'Try later',
+        markdown: 'Some partial work before failure',
+      });
+    });
+
+    it('retries only error and stopped answers, resetting to pending with new requestId', () => {
+      // Setup turn where claude has an error and gpt is stopped
+      const stateWithErrors = deepFreeze(
+        comparisonReducer(
+          comparisonReducer(
+            comparisonReducer(setupReadyState(), {
+              type: 'send',
+              turnId: 'turn-1',
+              prompt: 'question',
+              requests: {
+                'openai/gpt-5-mini': 'req-1',
+                'anthropic/claude-3-haiku': 'req-2',
+                'google/gemini-2.5-flash': 'req-3',
+              },
+            }),
+            {
+              type: 'stop',
+              turnId: 'turn-1',
+              modelId: 'openai/gpt-5-mini',
+              requestId: 'req-1',
+            },
+          ),
+          {
             type: 'resolve',
             turnId: 'turn-1',
             modelId: 'anthropic/claude-3-haiku',
             requestId: 'req-2',
-            answer: {
+            result: {
               state: 'error',
               message: 'Timeout error',
               description: 'Try again',
@@ -383,27 +603,39 @@ describe('comparisonState', () => {
       );
 
       // Attempting to retry a model that is pending -> ignored
-      const retryPending = comparisonReducer(stateWithError, {
+      const retryPending = comparisonReducer(stateWithErrors, {
         type: 'retry',
         turnId: 'turn-1',
-        modelId: 'openai/gpt-5-mini',
-        requestId: 'new-req-gpt',
+        modelId: 'google/gemini-2.5-flash',
+        requestId: 'new-req-gemini',
       });
-      expect(retryPending).toBe(stateWithError);
+      expect(retryPending).toBe(stateWithErrors);
 
-      // Retrying the error cell
-      const retriedState = comparisonReducer(stateWithError, {
+      // Retrying the error cell -> resets to pending
+      const retriedErrorState = comparisonReducer(stateWithErrors, {
         type: 'retry',
         turnId: 'turn-1',
         modelId: 'anthropic/claude-3-haiku',
         requestId: 'req-retry-claude-1',
       });
 
-      expect(retriedState.turns[0].answers['anthropic/claude-3-haiku']).toEqual({
+      expect(retriedErrorState.turns[0].answers['anthropic/claude-3-haiku']).toEqual({
         state: 'pending',
         requestId: 'req-retry-claude-1',
       });
-      expect(retriedState.turns[0].question).toBe('question');
+
+      // Retrying the stopped cell -> resets to pending
+      const retriedStoppedState = comparisonReducer(stateWithErrors, {
+        type: 'retry',
+        turnId: 'turn-1',
+        modelId: 'openai/gpt-5-mini',
+        requestId: 'req-retry-gpt-1',
+      });
+
+      expect(retriedStoppedState.turns[0].answers['openai/gpt-5-mini']).toEqual({
+        state: 'pending',
+        requestId: 'req-retry-gpt-1',
+      });
     });
   });
 

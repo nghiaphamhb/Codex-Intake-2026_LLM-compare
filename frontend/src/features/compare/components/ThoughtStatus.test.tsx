@@ -53,7 +53,7 @@ describe('ThoughtStatus', () => {
       <>
         <ThoughtStatus state="thinking" text="Thought 1" />
         <ThoughtStatus state="thinking" text="Thought 2" />
-      </>
+      </>,
     );
 
     const buttons = screen.getAllByRole('button');
@@ -82,5 +82,11 @@ describe('ThoughtStatus', () => {
     const updatedButton = screen.getByRole('button');
     expect(updatedButton).toHaveAttribute('aria-expanded', 'true');
     expect(container.textContent).toContain(thoughtText);
+  });
+
+  it('allows overriding label with label prop for live reasoning without timing', () => {
+    render(<ThoughtStatus state="done" label="Рассуждения" text="Live thoughts" />);
+    expect(screen.getByText('Рассуждения')).toBeInTheDocument();
+    expect(screen.queryByText('Готово')).toBeNull();
   });
 });

@@ -20,7 +20,12 @@ async function start() {
     const config = readConfig(process.env);
     const proxyClient = createAiProxyClient(config);
     const models = await proxyClient.listModels();
-    app = buildApp({ logger: true, models, generate: proxyClient.generate });
+    app = buildApp({
+      logger: true,
+      models,
+      generate: proxyClient.generate,
+      streamGenerate: proxyClient.streamGenerate,
+    });
     await app.listen({ port: config.port, host: '127.0.0.1' });
   } catch (err: unknown) {
     if (err instanceof Error && err.message.startsWith('Invalid configuration:')) {

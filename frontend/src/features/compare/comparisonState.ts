@@ -1,4 +1,5 @@
 import type { CompareModel, CompareTurn, ResultAnswer } from './types.js';
+import type { ComparisonStreamDelta } from './comparisonStream.js';
 
 export type ComparisonState = {
   catalog: readonly CompareModel[];
@@ -6,16 +7,28 @@ export type ComparisonState = {
   turns: readonly CompareTurn[];
 };
 
+export type ResolvePayload =
+  | { state: 'success'; durationLabel: string; costLabel?: string }
+  | { state: 'error'; message: string; description: string };
+
 export type ComparisonStateAction =
   | { type: 'catalog-loaded'; catalog: CompareModel[] }
   | { type: 'send'; turnId: string; prompt: string; requests: Record<string, string> }
   | { type: 'retry'; turnId: string; modelId: string; requestId: string }
   | {
+      type: 'stream-delta';
+      turnId: string;
+      modelId: string;
+      requestId: string;
+      event: ComparisonStreamDelta;
+    }
+  | { type: 'stop'; turnId: string; modelId: string; requestId: string }
+  | {
       type: 'resolve';
       turnId: string;
       modelId: string;
       requestId: string;
-      answer: Exclude<ResultAnswer, { state: 'pending' }>;
+      result: ResolvePayload;
     }
   | { type: 'select-model'; modelId: string }
   | { type: 'remove-model'; modelId: string }
@@ -119,7 +132,7 @@ export function comparisonReducer(
 
       const targetTurn = state.turns[turnIndex];
       const targetAnswer = targetTurn.answers[action.modelId];
-      if (!targetAnswer || targetAnswer.state !== 'error') {
+      if (!targetAnswer || (targetAnswer.state !== 'error' && targetAnswer.state !== 'stopped')) {
         return state;
       }
 
@@ -128,6 +141,106 @@ export function comparisonReducer(
         [action.modelId]: {
           state: 'pending',
           requestId: action.requestId,
+        },
+      };
+
+      const updatedTurn: CompareTurn = {
+        ...targetTurn,
+        answers: updatedAnswers,
+      };
+
+      const nextTurns = [...state.turns];
+      nextTurns[turnIndex] = updatedTurn;
+
+      return {
+        ...state,
+        turns: nextTurns,
+      };
+    }
+
+    case 'stream-delta': {
+      if (!state.models.some((model) => model.id === action.modelId)) {
+        return state;
+      }
+
+      const turnIndex = state.turns.findIndex((turn) => turn.id === action.turnId);
+      if (turnIndex === -1) {
+        return state;
+      }
+
+      const targetTurn = state.turns[turnIndex];
+      const targetAnswer = targetTurn.answers[action.modelId];
+      if (
+        !targetAnswer ||
+        (targetAnswer.state !== 'pending' && targetAnswer.state !== 'streaming') ||
+        targetAnswer.requestId !== action.requestId
+      ) {
+        return state;
+      }
+
+      let currentMarkdown = targetAnswer.state === 'streaming' ? targetAnswer.markdown : '';
+      let currentReasoning = targetAnswer.state === 'streaming' ? targetAnswer.reasoning : '';
+
+      if (action.event.type === 'text-delta') {
+        currentMarkdown += action.event.delta;
+      } else if (action.event.type === 'reasoning-delta') {
+        currentReasoning += action.event.delta;
+      }
+
+      const updatedAnswers: Record<string, ResultAnswer | undefined> = {
+        ...targetTurn.answers,
+        [action.modelId]: {
+          state: 'streaming',
+          requestId: action.requestId,
+          markdown: currentMarkdown,
+          reasoning: currentReasoning,
+        },
+      };
+
+      const updatedTurn: CompareTurn = {
+        ...targetTurn,
+        answers: updatedAnswers,
+      };
+
+      const nextTurns = [...state.turns];
+      nextTurns[turnIndex] = updatedTurn;
+
+      return {
+        ...state,
+        turns: nextTurns,
+      };
+    }
+
+    case 'stop': {
+      if (!state.models.some((model) => model.id === action.modelId)) {
+        return state;
+      }
+
+      const turnIndex = state.turns.findIndex((turn) => turn.id === action.turnId);
+      if (turnIndex === -1) {
+        return state;
+      }
+
+      const targetTurn = state.turns[turnIndex];
+      const targetAnswer = targetTurn.answers[action.modelId];
+      if (
+        !targetAnswer ||
+        (targetAnswer.state !== 'pending' && targetAnswer.state !== 'streaming') ||
+        targetAnswer.requestId !== action.requestId
+      ) {
+        return state;
+      }
+
+      const markdown = targetAnswer.state === 'streaming' ? targetAnswer.markdown : '';
+      const reasoning = targetAnswer.state === 'streaming' ? targetAnswer.reasoning : '';
+
+      const updatedAnswers: Record<string, ResultAnswer | undefined> = {
+        ...targetTurn.answers,
+        [action.modelId]: {
+          state: 'stopped',
+          requestId: action.requestId,
+          markdown,
+          reasoning,
         },
       };
 
@@ -159,18 +272,41 @@ export function comparisonReducer(
       const targetAnswer = targetTurn.answers[action.modelId];
       if (
         !targetAnswer ||
-        targetAnswer.state !== 'pending' ||
+        (targetAnswer.state !== 'pending' && targetAnswer.state !== 'streaming') ||
         targetAnswer.requestId !== action.requestId
       ) {
         return state;
       }
 
+      const currentMarkdown = targetAnswer.state === 'streaming' ? targetAnswer.markdown : '';
+      const currentReasoning = targetAnswer.state === 'streaming' ? targetAnswer.reasoning : '';
+
+      let nextAnswer: ResultAnswer;
+      if (action.result.state === 'success') {
+        const thought = currentReasoning.trim().length > 0 ? { text: currentReasoning } : undefined;
+
+        nextAnswer = {
+          state: 'success',
+          requestId: action.requestId,
+          markdown: currentMarkdown,
+          durationLabel: action.result.durationLabel,
+          costLabel: action.result.costLabel,
+          thought,
+        };
+      } else {
+        nextAnswer = {
+          state: 'error',
+          requestId: action.requestId,
+          message: action.result.message,
+          description: action.result.description,
+          ...(currentMarkdown.length > 0 ? { markdown: currentMarkdown } : {}),
+          ...(currentReasoning.length > 0 ? { reasoning: currentReasoning } : {}),
+        };
+      }
+
       const updatedAnswers: Record<string, ResultAnswer | undefined> = {
         ...targetTurn.answers,
-        [action.modelId]: {
-          ...action.answer,
-          requestId: action.requestId,
-        },
+        [action.modelId]: nextAnswer,
       };
 
       const updatedTurn: CompareTurn = {

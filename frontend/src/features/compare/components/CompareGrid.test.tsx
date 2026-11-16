@@ -189,4 +189,31 @@ describe('CompareGrid', () => {
     expect(disabledButtons[0]).toBeDisabled();
     expect(disabledButtons[1]).toBeDisabled();
   });
+
+  it('calls onAction with stop when Stop button in AnswerCell is clicked', async () => {
+    const user = userEvent.setup();
+    const onAction = vi.fn();
+    const turnWithPending: CompareTurn = {
+      id: 'turn-stop-test',
+      question: 'Test stop',
+      answers: {
+        'claude-demo': {
+          state: 'pending',
+          requestId: 'req-1',
+        },
+      },
+    };
+
+    render(<CompareGrid models={desktopModels} turns={[turnWithPending]} onAction={onAction} />);
+
+    const stopButton = screen.getByRole('button', {
+      name: 'Остановить ответ: Claude Haiku 5.5',
+    });
+    await user.click(stopButton);
+    expect(onAction).toHaveBeenCalledWith({
+      type: 'stop',
+      turnId: 'turn-stop-test',
+      modelId: 'claude-demo',
+    });
+  });
 });

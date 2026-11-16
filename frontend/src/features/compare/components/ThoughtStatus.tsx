@@ -6,20 +6,35 @@ export type ThoughtStatusProps = {
   text?: string;
   durationSeconds?: number;
   variant?: 'badge' | 'inline';
+  label?: string;
 };
 
-export function ThoughtStatus({ state, text, durationSeconds, variant = 'badge' }: ThoughtStatusProps) {
+export function ThoughtStatus({
+  state,
+  text,
+  durationSeconds,
+  variant = 'badge',
+  label,
+}: ThoughtStatusProps) {
   const [isOpen, setIsOpen] = useState(false);
   const contentId = useId();
 
-  const label =
+  const defaultLabel =
     state === 'thinking'
       ? 'Думает…'
       : durationSeconds != null
-      ? `Думала ${variant === 'inline'
-          ? new Intl.NumberFormat('ru', { style: 'unit', unit: 'second', unitDisplay: 'long' }).format(durationSeconds)
-          : `${durationSeconds} с`}`
-      : 'Готово';
+        ? `Думала ${
+            variant === 'inline'
+              ? new Intl.NumberFormat('ru', {
+                  style: 'unit',
+                  unit: 'second',
+                  unitDisplay: 'long',
+                }).format(durationSeconds)
+              : `${durationSeconds} с`
+          }`
+        : 'Готово';
+
+  const displayLabel = label ?? defaultLabel;
 
   const hasContent = Boolean(text && text.trim().length > 0);
 
@@ -34,7 +49,7 @@ export function ThoughtStatus({ state, text, durationSeconds, variant = 'badge' 
           onClick={() => setIsOpen(!isOpen)}
         >
           <img src="/assets/icons/clock.svg" alt="" className={styles.icon} />
-          <span>{label}</span>
+          <span>{displayLabel}</span>
           <img
             src="/assets/icons/chevron-down.svg"
             alt=""
@@ -44,7 +59,7 @@ export function ThoughtStatus({ state, text, durationSeconds, variant = 'badge' 
       ) : (
         <div className={styles.staticBadge}>
           <img src="/assets/icons/clock.svg" alt="" className={styles.icon} />
-          <span>{label}</span>
+          <span>{displayLabel}</span>
         </div>
       )}
       {hasContent && isOpen && (
@@ -55,4 +70,3 @@ export function ThoughtStatus({ state, text, durationSeconds, variant = 'badge' 
     </div>
   );
 }
-

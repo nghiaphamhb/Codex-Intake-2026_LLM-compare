@@ -3,6 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { CodeBlock } from './CodeBlock';
 import styles from './AnswerContent.module.css';
+import { normalizeMath, mathRemarkPlugins, mathRehypePlugins } from '../math';
 
 export type AnswerContentProps = {
   markdown: string;
@@ -14,7 +15,8 @@ export function AnswerContent({ markdown, className }: AnswerContentProps) {
     <div className={`${styles.content} ${className || ''}`}>
       <ReactMarkdown
         skipHtml={true}
-        remarkPlugins={[remarkGfm]}
+        remarkPlugins={[remarkGfm, ...mathRemarkPlugins]}
+        rehypePlugins={mathRehypePlugins}
         components={{
           pre({ children }) {
             if (React.isValidElement(children)) {
@@ -25,15 +27,9 @@ export function AnswerContent({ markdown, className }: AnswerContentProps) {
                 typeof codeProps.children === 'string'
                   ? codeProps.children
                   : Array.isArray(codeProps.children)
-                  ? codeProps.children.join('')
-                  : String(codeProps.children ?? '');
-              return (
-                <CodeBlock
-                  code={rawCode}
-                  language={language}
-                  className={styles.codeBlock}
-                />
-              );
+                    ? codeProps.children.join('')
+                    : String(codeProps.children ?? '');
+              return <CodeBlock code={rawCode} language={language} className={styles.codeBlock} />;
             }
             return <pre>{children}</pre>;
           },
@@ -61,7 +57,7 @@ export function AnswerContent({ markdown, className }: AnswerContentProps) {
           },
         }}
       >
-        {markdown}
+        {normalizeMath(markdown)}
       </ReactMarkdown>
     </div>
   );

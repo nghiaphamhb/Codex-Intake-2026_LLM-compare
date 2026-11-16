@@ -3,6 +3,7 @@ import { render, screen, within, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ComparePage } from './ComparePage.js';
 import * as comparisonApi from './comparisonApi.js';
+import * as comparisonStream from './comparisonStream.js';
 import type { CompareModel } from './types.js';
 
 interface Deferred<T> {
@@ -31,7 +32,7 @@ const testCatalog: CompareModel[] = [
 
 describe('ComparePage', () => {
   let fetchModelsSpy: ReturnType<typeof vi.spyOn>;
-  let generateAnswerSpy: ReturnType<typeof vi.spyOn>;
+  let streamAnswerSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -48,7 +49,7 @@ describe('ComparePage', () => {
     }
 
     fetchModelsSpy = vi.spyOn(comparisonApi, 'fetchModels');
-    generateAnswerSpy = vi.spyOn(comparisonApi, 'generateAnswer');
+    streamAnswerSpy = vi.spyOn(comparisonStream, 'streamAnswer');
   });
 
   afterEach(() => {
@@ -129,20 +130,39 @@ describe('ComparePage', () => {
   });
 
   describe('Prompt sending and generation orchestration', () => {
-    it('dispatches concurrent generation calls for all 3 models, renders waiting states, and resolves out-of-order', async () => {
+    it('dispatches concurrent generation calls for all 3 models, renders waiting states, and resolves out-of-order with streaming deltas', async () => {
       const user = userEvent.setup();
       fetchModelsSpy.mockResolvedValue(testCatalog);
 
-      const deferred1 = createDeferred<comparisonApi.GenerateResponse>();
-      const deferred2 = createDeferred<comparisonApi.GenerateResponse>();
-      const deferred3 = createDeferred<comparisonApi.GenerateResponse>();
+      const deferred1 = createDeferred<comparisonStream.ComparisonStreamResult>();
+      const deferred2 = createDeferred<comparisonStream.ComparisonStreamResult>();
+      const deferred3 = createDeferred<comparisonStream.ComparisonStreamResult>();
 
-      generateAnswerSpy.mockImplementation(({ modelId }: { modelId: string }) => {
-        if (modelId === 'test/model-1') return deferred1.promise;
-        if (modelId === 'test/model-2') return deferred2.promise;
-        if (modelId === 'test/model-3') return deferred3.promise;
-        return Promise.reject(new Error('Unexpected model'));
-      });
+      let onDelta1: (d: comparisonStream.ComparisonStreamDelta) => void = () => {};
+      let _onDelta2: (d: comparisonStream.ComparisonStreamDelta) => void = () => {};
+      let onDelta3: (d: comparisonStream.ComparisonStreamDelta) => void = () => {};
+
+      streamAnswerSpy.mockImplementation(
+        (
+          { modelId }: { modelId: string },
+          _signal: AbortSignal,
+          onDelta: (d: comparisonStream.ComparisonStreamDelta) => void,
+        ) => {
+          if (modelId === 'test/model-1') {
+            onDelta1 = onDelta;
+            return deferred1.promise;
+          }
+          if (modelId === 'test/model-2') {
+            _onDelta2 = onDelta;
+            return deferred2.promise;
+          }
+          if (modelId === 'test/model-3') {
+            onDelta3 = onDelta;
+            return deferred3.promise;
+          }
+          return Promise.reject(new Error('Unexpected model'));
+        },
+      );
 
       render(<ComparePage />);
       await screen.findByText('Model One');
@@ -157,29 +177,40 @@ describe('ComparePage', () => {
       expect(textarea).toHaveValue('');
 
       // Verify all 3 generation calls were made concurrently before any resolved
-      expect(generateAnswerSpy).toHaveBeenCalledTimes(3);
-      expect(generateAnswerSpy).toHaveBeenCalledWith(
+      expect(streamAnswerSpy).toHaveBeenCalledTimes(3);
+      expect(streamAnswerSpy).toHaveBeenCalledWith(
         { prompt: 'Какая погода?', modelId: 'test/model-1' },
         expect.any(AbortSignal),
+        expect.any(Function),
       );
-      expect(generateAnswerSpy).toHaveBeenCalledWith(
+      expect(streamAnswerSpy).toHaveBeenCalledWith(
         { prompt: 'Какая погода?', modelId: 'test/model-2' },
         expect.any(AbortSignal),
+        expect.any(Function),
       );
-      expect(generateAnswerSpy).toHaveBeenCalledWith(
+      expect(streamAnswerSpy).toHaveBeenCalledWith(
         { prompt: 'Какая погода?', modelId: 'test/model-3' },
         expect.any(AbortSignal),
+        expect.any(Function),
       );
 
-      // Verify pending status in all 3 cells
+      // Verify pending status in all 3 cells and composer is busy with Stop all
+      expect(screen.getByRole('button', { name: 'Остановить генерацию' })).toBeInTheDocument();
       const waitingStatuses = screen.getAllByRole('status');
       expect(waitingStatuses.some((s) => s.textContent?.includes('Ждём ответ…'))).toBe(true);
+
+      // Stream deltas to Model 3
+      act(() => {
+        onDelta3({ type: 'reasoning-delta', delta: 'Analyzing query...' });
+        onDelta3({ type: 'text-delta', delta: 'Ответ от Model Three' });
+      });
+
+      expect(screen.getByText('Ответ от Model Three')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Рассуждения' })).toBeInTheDocument();
 
       // Resolve Model 3 first (out of order!)
       await act(async () => {
         deferred3.resolve({
-          modelId: 'test/model-3',
-          text: 'Ответ от Model Three',
           durationMs: 1500,
           costUsd: 0.0016,
         });
@@ -189,11 +220,13 @@ describe('ComparePage', () => {
       expect(screen.getByText('$0,0016').parentElement).toHaveTextContent('1,5 с · $0,0016');
 
       // Resolve Model 1 second
+      act(() => {
+        onDelta1({ type: 'text-delta', delta: 'Ответ от Model One' });
+      });
       await act(async () => {
         deferred1.resolve({
-          modelId: 'test/model-1',
-          text: 'Ответ от Model One',
           durationMs: 2200,
+          costUsd: null,
         });
       });
       expect(screen.getByText('Ответ от Model One')).toBeInTheDocument();
@@ -207,20 +240,17 @@ describe('ComparePage', () => {
       expect(screen.getByText('Лимит запросов исчерпан.')).toBeInTheDocument();
       expect(screen.getByText('Повторите запрос позже.')).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /повторить/i })).toBeInTheDocument();
+
+      // When all are done/error, composer busy returns to false
+      expect(screen.getByRole('button', { name: /отправить вопрос/i })).toBeInTheDocument();
     });
 
-    it('allows sending a second prompt while earlier turn is still pending', async () => {
+    it('blocks sending new prompt while turn is active, turns composer into Stop all, and preserves draft', async () => {
       const user = userEvent.setup();
       fetchModelsSpy.mockResolvedValue(testCatalog.slice(0, 2));
 
-      const deferredTurn1 = createDeferred<comparisonApi.GenerateResponse>();
-      const deferredTurn2 = createDeferred<comparisonApi.GenerateResponse>();
-
-      let callCount = 0;
-      generateAnswerSpy.mockImplementation(() => {
-        callCount++;
-        return callCount <= 2 ? deferredTurn1.promise : deferredTurn2.promise;
-      });
+      const deferredTurn1 = createDeferred<comparisonStream.ComparisonStreamResult>();
+      streamAnswerSpy.mockImplementation(() => deferredTurn1.promise);
 
       render(<ComparePage />);
       await screen.findByText('Model One');
@@ -232,16 +262,72 @@ describe('ComparePage', () => {
       await user.type(textarea, 'Вопрос 1');
       await user.click(sendBtn);
 
-      expect(generateAnswerSpy).toHaveBeenCalledTimes(2);
+      expect(streamAnswerSpy).toHaveBeenCalledTimes(2);
       expect(screen.getByText('Вопрос 1')).toBeInTheDocument();
 
-      // Second question while first is pending
-      await user.type(textarea, 'Вопрос 2');
-      await user.click(sendBtn);
+      // Composer is now busy with Stop button
+      const stopAllBtn = screen.getByRole('button', { name: 'Остановить генерацию' });
+      expect(stopAllBtn).toBeInTheDocument();
 
-      expect(generateAnswerSpy).toHaveBeenCalledTimes(4);
-      expect(screen.getByText('Вопрос 1')).toBeInTheDocument();
-      expect(screen.getByText('Вопрос 2')).toBeInTheDocument();
+      // Typing a draft while busy is allowed
+      await user.type(textarea, 'Черновик вопроса 2');
+      expect(textarea).toHaveValue('Черновик вопроса 2');
+
+      // Pressing enter does NOT send or create second turn
+      await user.type(textarea, '{Enter}');
+      expect(streamAnswerSpy).toHaveBeenCalledTimes(2);
+      expect(screen.queryByText('Черновик вопроса 2', { selector: 'p' })).toBeNull();
+      expect(textarea).toHaveValue('Черновик вопроса 2');
+
+      // Stop all cancels requests, stops cells, preserves draft, and restores Send button
+      await user.click(stopAllBtn);
+      expect(screen.getAllByText('Генерация остановлена.')).toHaveLength(2);
+      expect(textarea).toHaveValue('Черновик вопроса 2');
+      expect(screen.getByRole('button', { name: /отправить вопрос/i })).toBeInTheDocument();
+    });
+
+    it('allows stopping an individual cell while others continue, and retrying the stopped cell', async () => {
+      const user = userEvent.setup();
+      fetchModelsSpy.mockResolvedValue(testCatalog.slice(0, 2));
+
+      const signals: Record<string, AbortSignal> = {};
+      const deferreds: Record<string, Deferred<comparisonStream.ComparisonStreamResult>> = {};
+
+      streamAnswerSpy.mockImplementation(
+        ({ modelId }: { modelId: string }, signal: AbortSignal) => {
+          signals[modelId] = signal;
+          deferreds[modelId] = createDeferred<comparisonStream.ComparisonStreamResult>();
+          return deferreds[modelId].promise;
+        },
+      );
+
+      render(<ComparePage />);
+      await screen.findByText('Model One');
+
+      await user.type(screen.getByRole('textbox'), 'Вопрос для остановки одной модели');
+      await user.click(screen.getByRole('button', { name: /отправить вопрос/i }));
+
+      // Stop only Model One
+      const stopModel1Btn = screen.getByRole('button', {
+        name: 'Остановить ответ: Model One',
+      });
+      await user.click(stopModel1Btn);
+
+      // Model One is stopped and aborted
+      expect(signals['test/model-1']?.aborted).toBe(true);
+      expect(screen.getByText('Генерация остановлена.')).toBeInTheDocument();
+
+      // Model Two is STILL active and NOT aborted
+      expect(signals['test/model-2']?.aborted).toBe(false);
+      expect(
+        screen.getByRole('button', { name: 'Остановить ответ: Model Two' }),
+      ).toBeInTheDocument();
+
+      // Retrying Model One is allowed while Model Two is still active
+      const retryModel1Btn = screen.getByRole('button', { name: 'Повторить' });
+      await user.click(retryModel1Btn);
+
+      expect(streamAnswerSpy).toHaveBeenCalledTimes(3);
     });
   });
 
@@ -251,23 +337,30 @@ describe('ComparePage', () => {
       fetchModelsSpy.mockResolvedValue(testCatalog.slice(0, 2));
 
       let callIndex = 0;
-      const retryDeferred = createDeferred<comparisonApi.GenerateResponse>();
+      const retryDeferred = createDeferred<comparisonStream.ComparisonStreamResult>();
 
-      generateAnswerSpy.mockImplementation(({ modelId }: { modelId: string }) => {
-        callIndex++;
-        if (callIndex === 1) {
-          return Promise.resolve({
-            modelId,
-            text: 'Good answer M1',
-            durationMs: 1000,
-          });
-        }
-        if (callIndex === 2) {
-          return Promise.reject(new comparisonApi.ComparisonApiError('UPSTREAM_TIMEOUT'));
-        }
-        // Retry call
-        return retryDeferred.promise;
-      });
+      streamAnswerSpy.mockImplementation(
+        (
+          _input: unknown,
+          _signal: AbortSignal,
+          onDelta: (d: comparisonStream.ComparisonStreamDelta) => void,
+        ) => {
+          callIndex++;
+          if (callIndex === 1) {
+            onDelta({ type: 'text-delta', delta: 'Good answer M1' });
+            return Promise.resolve({
+              durationMs: 1000,
+              costUsd: null,
+            });
+          }
+          if (callIndex === 2) {
+            return Promise.reject(new comparisonApi.ComparisonApiError('UPSTREAM_TIMEOUT'));
+          }
+          // Retry call
+          onDelta({ type: 'text-delta', delta: 'Successful retry answer M2' });
+          return retryDeferred.promise;
+        },
+      );
 
       render(<ComparePage />);
       await screen.findByText('Model One');
@@ -281,25 +374,25 @@ describe('ComparePage', () => {
       await screen.findByText('Время ожидания истекло.');
 
       const retryBtn = screen.getByRole('button', { name: /повторить/i });
-      expect(generateAnswerSpy).toHaveBeenCalledTimes(2);
+      expect(streamAnswerSpy).toHaveBeenCalledTimes(2);
 
       // Rapidly double click retry
       await user.click(retryBtn);
       await user.click(retryBtn);
 
       // Only 1 additional call made due to in-flight synchronous guard!
-      expect(generateAnswerSpy).toHaveBeenCalledTimes(3);
-      expect(generateAnswerSpy).toHaveBeenLastCalledWith(
+      expect(streamAnswerSpy).toHaveBeenCalledTimes(3);
+      expect(streamAnswerSpy).toHaveBeenLastCalledWith(
         { prompt: 'Исторический вопрос', modelId: 'test/model-2' },
         expect.any(AbortSignal),
+        expect.any(Function),
       );
 
       // Resolve retry
       await act(async () => {
         retryDeferred.resolve({
-          modelId: 'test/model-2',
-          text: 'Successful retry answer M2',
           durationMs: 1800,
+          costUsd: null,
         });
       });
 
@@ -314,12 +407,20 @@ describe('ComparePage', () => {
       fetchModelsSpy.mockResolvedValue(testCatalog.slice(0, 2));
 
       let capturedSignal: AbortSignal | undefined;
-      const deferred = createDeferred<comparisonApi.GenerateResponse>();
+      const lateDeltas: Parameters<typeof comparisonStream.streamAnswer>[2][] = [];
+      const deferred = createDeferred<comparisonStream.ComparisonStreamResult>();
 
-      generateAnswerSpy.mockImplementation((_input: unknown, signal?: AbortSignal) => {
-        capturedSignal = signal;
-        return deferred.promise;
-      });
+      streamAnswerSpy.mockImplementation(
+        (
+          _input: unknown,
+          signal?: AbortSignal,
+          onDelta?: Parameters<typeof comparisonStream.streamAnswer>[2],
+        ) => {
+          capturedSignal = signal;
+          if (onDelta) lateDeltas.push(onDelta);
+          return deferred.promise;
+        },
+      );
 
       render(<ComparePage />);
       await screen.findByText('Model One');
@@ -339,10 +440,10 @@ describe('ComparePage', () => {
 
       // Late resolve does not resurrect answer
       await act(async () => {
+        lateDeltas.forEach((onDelta) => onDelta({ type: 'text-delta', delta: 'Ghost answer' }));
         deferred.resolve({
-          modelId: 'test/model-1',
-          text: 'Ghost answer',
           durationMs: 1000,
+          costUsd: null,
         });
       });
 
@@ -383,14 +484,20 @@ describe('ComparePage', () => {
       ]);
 
       let m3Signal: AbortSignal | undefined;
-      const lateModel = createDeferred<comparisonApi.GenerateResponse>();
-      generateAnswerSpy.mockImplementation(
-        ({ modelId }: { modelId: string }, signal?: AbortSignal) => {
+      let removedDelta: Parameters<typeof comparisonStream.streamAnswer>[2] | undefined;
+      const lateModel = createDeferred<comparisonStream.ComparisonStreamResult>();
+      streamAnswerSpy.mockImplementation(
+        (
+          { modelId }: { modelId: string },
+          signal?: AbortSignal,
+          onDelta?: Parameters<typeof comparisonStream.streamAnswer>[2],
+        ) => {
           if (modelId === 'test/model:variant') {
             m3Signal = signal;
+            removedDelta = onDelta;
             return lateModel.promise;
           }
-          return createDeferred<comparisonApi.GenerateResponse>().promise;
+          return createDeferred<comparisonStream.ComparisonStreamResult>().promise;
         },
       );
 
@@ -413,10 +520,10 @@ describe('ComparePage', () => {
         within(screen.getByRole('dialog')).getByRole('button', { name: /Model Three/ }),
       );
       await act(async () => {
+        removedDelta?.({ type: 'text-delta', delta: 'Ghost removed model' });
         lateModel.resolve({
-          modelId: 'test/model:variant',
-          text: 'Ghost removed model',
           durationMs: 1,
+          costUsd: null,
         });
       });
       expect(screen.queryByText('Ghost removed model')).toBeNull();
@@ -450,8 +557,8 @@ describe('ComparePage', () => {
     const user = userEvent.setup();
     fetchModelsSpy.mockResolvedValue(testCatalog.slice(0, 2));
     const signals: AbortSignal[] = [];
-    const deferred = createDeferred<comparisonApi.GenerateResponse>();
-    generateAnswerSpy.mockImplementation((_input: unknown, signal: AbortSignal) => {
+    const deferred = createDeferred<comparisonStream.ComparisonStreamResult>();
+    streamAnswerSpy.mockImplementation((_input: unknown, signal: AbortSignal) => {
       signals.push(signal);
       return deferred.promise;
     });
@@ -463,7 +570,7 @@ describe('ComparePage', () => {
     view.unmount();
     expect(signals.every((signal) => signal.aborted)).toBe(true);
     await act(async () => {
-      deferred.resolve({ modelId: 'test/model-1', text: 'Late unmounted', durationMs: 0 });
+      deferred.resolve({ durationMs: 0, costUsd: null });
     });
     expect(screen.queryByText('Late unmounted')).toBeNull();
   });

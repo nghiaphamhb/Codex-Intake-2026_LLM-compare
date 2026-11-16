@@ -52,6 +52,7 @@ export async function withBrowser(checks) {
     const consoleErrors = [];
     const expectedResources = [];
     const strictModeAborts = [];
+    const terminalAbortChecks = [];
     const matches = (expected, request) =>
       expected.method === request.method() &&
       new URL(request.url()).origin === new URL(url).origin &&
@@ -61,10 +62,19 @@ export async function withBrowser(checks) {
     context.on('page', (page) => {
       let catalogLoad = { requests: 0 };
       const catalogRequests = new Map();
+      const streamAttempts = new Map();
+      const streamRequests = new Map();
       page.on('framenavigated', (frame) => {
         if (frame === page.mainFrame()) catalogLoad = { requests: 0 };
       });
       page.on('request', (request) => {
+        if (matches({ method: 'POST', path: '/api/stream' }, request)) {
+          const body = request.postDataJSON();
+          const key = JSON.stringify([body.prompt, body.modelId]);
+          const attempt = (streamAttempts.get(key) || 0) + 1;
+          streamAttempts.set(key, attempt);
+          streamRequests.set(request, { ...body, key, attempt });
+        }
         if (matches({ method: 'GET', path: '/api/models' }, request)) {
           catalogRequests.set(request, { load: catalogLoad, ordinal: ++catalogLoad.requests });
         }
@@ -89,6 +99,42 @@ export async function withBrowser(checks) {
           // Accept only the first aborted GET when this navigation also issues its replacement.
           strictModeAborts.push({ ...catalogRequest, url: request.url() });
           expectedResources.push({ page, url: request.url(), reason });
+        } else if (reason === 'net::ERR_ABORTED' && streamRequests.has(request)) {
+          const info = streamRequests.get(request);
+          // Reader cancellation after a terminal is allowed only for this attempt,
+          // with HTTP200 and a matching success/error cell (never merely partial/stopped).
+          terminalAbortChecks.push(
+            (async () => {
+              try {
+                const response = await request.response();
+                assert.equal(response?.status(), 200);
+                await page.waitForFunction(
+                  ({ prompt, modelId }) => {
+                    for (const section of document.querySelectorAll('section')) {
+                      const question = section.querySelector('[class*="questionBubbleWrapper"]');
+                      if (question?.textContent !== prompt) continue;
+                      const cell = Array.from(section.querySelectorAll('[data-testid]')).find(
+                        (node) => node.getAttribute('data-testid')?.startsWith(`cell-${modelId}-`),
+                      );
+                      if (!cell || cell.getAttribute('aria-busy') !== 'false') continue;
+                      const success = cell.querySelector('[class*="metadata"]');
+                      const error =
+                        cell.querySelector('button[data-action="retry"]') &&
+                        !cell.querySelector('[class*="stoppedStatus"]');
+                      if (success || error) return true;
+                    }
+                    return false;
+                  },
+                  info,
+                  { timeout: 1000 },
+                );
+                assert.equal(streamAttempts.get(info.key), info.attempt);
+                expectedResources.push({ page, url: request.url(), reason });
+              } catch {
+                errors.push(`Unverified terminal abort: ${info.modelId}, attempt ${info.attempt}`);
+              }
+            })(),
+          );
         } else {
           errors.push(`requestfailed: ${request.method()} ${request.url()} ${reason}`);
         }
@@ -125,6 +171,7 @@ export async function withBrowser(checks) {
 
     await reset();
     await checks({ page, context, url, reset, stub, expectHttpError, expectRequestFailed });
+    await Promise.all(terminalAbortChecks);
 
     for (const canceled of strictModeAborts) {
       if (canceled.load.requests < 2) errors.push(`Unmatched catalog abort: ${canceled.url}`);
@@ -172,7 +219,13 @@ export async function sendPromptAndWait(
   await input.fill(prompt);
   await page.getByRole('button', { name: 'Отправить вопрос', exact: true }).click();
   await page.locator('[data-testid^="cell-"]').first().waitFor({ state: 'visible' });
-  await page.waitForFunction(() => !document.body.textContent.includes('Ждём ответ…'));
+  await page.waitForFunction(
+    () =>
+      !document.body.textContent.includes('Ждём ответ…') &&
+      !document.body.textContent.includes('Печатает…') &&
+      !document.body.textContent.includes('Получаем ответ…') &&
+      document.querySelectorAll('[aria-busy="true"]').length === 0,
+  );
 }
 
 export async function measureLayout(page) {

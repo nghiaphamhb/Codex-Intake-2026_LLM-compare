@@ -624,3 +624,139 @@ test('startup preserves pricing snapshot for generation cost without exposing me
     rmSync(tempDir, { recursive: true, force: true });
   }
 });
+
+test('startup wires stream dependency so POST /api/stream does not return 503 and streams real start/delta/done', async () => {
+  let modelCalls = 0;
+  let streamCalls = 0;
+  const fakeKey = 'fake-startup-stream-key';
+  const promptSentinel = 'stream-prompt-secret-xyz';
+  const textSentinel = 'stream-text-delta-abc';
+  const rawErrorSentinel = 'provider-secret-stream-error';
+
+  const stub = await startUpstream((req, res) => {
+    if (req.url === '/models' && req.method === 'GET') {
+      modelCalls++;
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          models: [
+            {
+              id: 'test/stream-model',
+              name: 'Stream Model',
+              pricing: { input: 1.0, output: 2.0 },
+            },
+          ],
+        }),
+      );
+      return;
+    }
+
+    if (req.url === '/stream' && req.method === 'POST') {
+      streamCalls++;
+      res.writeHead(200, { 'content-type': 'application/x-ndjson' });
+      res.write(JSON.stringify({ type: 'start' }) + '\n');
+      res.write(JSON.stringify({ type: 'text-delta', delta: textSentinel }) + '\n');
+      if (streamCalls === 2) {
+        res.end(JSON.stringify({ type: 'error', message: rawErrorSentinel }) + '\n');
+        return;
+      }
+      res.write(
+        JSON.stringify({ type: 'finish', usage: { inputTokens: 10, outputTokens: 20 } }) + '\n',
+      );
+      res.end();
+      return;
+    }
+
+    res.writeHead(404);
+    res.end();
+  });
+
+  const tempDir = createStartupFixture('startup-stream-wiring-');
+  const port = await getFreePort();
+  let child: ChildProcess | undefined;
+  let output = '';
+
+  try {
+    child = spawn(
+      process.execPath,
+      ['--import', tsxLoaderUrl, join(tempDir, 'backend/src/server.ts')],
+      {
+        cwd: tempDir,
+        env: getSanitizedEnv({
+          PORT: String(port),
+          LLM_BASE_URL: stub.baseUrl,
+          LLM_API_KEY: fakeKey,
+          LLM_TIMEOUT_MS: '1500',
+        }),
+      },
+    );
+    child.stdout?.on('data', (chunk) => {
+      output += chunk.toString();
+    });
+    child.stderr?.on('data', (chunk) => {
+      output += chunk.toString();
+    });
+
+    assert.equal((await waitForHealth(port, child)).status, 200);
+
+    const streamResponse = await fetch(`http://127.0.0.1:${port}/api/stream`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ prompt: promptSentinel, modelId: 'test/stream-model' }),
+    });
+
+    assert.equal(streamResponse.status, 200);
+    assert.equal(streamResponse.headers.get('content-type'), 'application/x-ndjson; charset=utf-8');
+
+    const bodyText = await streamResponse.text();
+    const lines = bodyText
+      .trim()
+      .split('\n')
+      .map((l) => JSON.parse(l));
+
+    assert.equal(lines.length, 3);
+    assert.deepEqual(lines[0], { type: 'start', modelId: 'test/stream-model' });
+    assert.deepEqual(lines[1], { type: 'text-delta', delta: textSentinel });
+    assert.equal(lines[2].type, 'done');
+    assert.equal(typeof lines[2].durationMs, 'number');
+    assert.ok(lines[2].durationMs >= 0);
+    // Cost: 10 * 1/1M + 20 * 2/1M = 0.00001 + 0.00004 = 0.00005
+    assert.ok(Math.abs(lines[2].costUsd - 0.00005) < 1e-9);
+
+    assert.equal(modelCalls, 1, 'catalog should be fetched only once');
+    assert.equal(streamCalls, 1, 'stream should be called once');
+
+    const failedStream = await fetch(`http://127.0.0.1:${port}/api/stream`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ prompt: promptSentinel, modelId: 'test/stream-model' }),
+    });
+    assert.equal(failedStream.status, 200);
+    const errorEvents = (await failedStream.text())
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line));
+    assert.deepEqual(errorEvents.at(-1), {
+      type: 'error',
+      error: { code: 'UPSTREAM_ERROR', message: 'Model service request failed' },
+    });
+    assert.equal(streamCalls, 2);
+    assert.equal(modelCalls, 1);
+
+    await stopChild(child);
+    for (const sentinel of [
+      fakeKey,
+      promptSentinel,
+      textSentinel,
+      rawErrorSentinel,
+      'inputTokens',
+      'pricing',
+    ]) {
+      assert.equal(output.includes(sentinel), false, `log should not leak ${sentinel}`);
+    }
+  } finally {
+    await stopChild(child);
+    await stub.close();
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
