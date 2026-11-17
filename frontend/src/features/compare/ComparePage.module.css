@@ -25,6 +25,10 @@
   align-items: stretch;
 }
 
+.sidebarColumn {
+  min-width: 0;
+}
+
 .composerWrapper {
   padding-top: 40px;
   padding-bottom: 24px;
@@ -105,4 +109,40 @@
   font-family: var(--font-sans);
   font-size: var(--font-size-body);
   color: var(--color-text-secondary);
+  text-align: center;
+}
+
+@media (max-width: 1279px) {
+  .page {
+    min-width: 320px;
+    width: 100%;
+    min-height: 100dvh;
+  }
+
+  .container {
+    width: 100%;
+    padding-inline: 16px;
+  }
+
+  .bodyGrid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+    padding-top: 16px;
+  }
+
+  .sidebarColumn {
+    display: none;
+  }
+
+  .composerWrapper {
+    padding-top: 24px;
+    padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    width: calc(100% + 8px);
+    margin-inline: -4px;
+    padding-inline: 0;
+  }
+
+  .composerInner {
+    width: 100%;
+  }
 }

@@ -574,4 +574,117 @@ describe('ComparePage', () => {
     });
     expect(screen.queryByText('Late unmounted')).toBeNull();
   });
+
+  describe('Mobile Narrow Layout (FE009)', () => {
+    beforeEach(() => {
+      vi.stubGlobal('matchMedia', (query: string) => ({
+        media: query,
+        matches: query === '(max-width: 1279px)',
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }));
+    });
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it('renders tabs and only active model visible without background generation interruption', async () => {
+      const user = userEvent.setup();
+      fetchModelsSpy.mockResolvedValue(testCatalog.slice(0, 3));
+
+      type DeltaCallback = (e: comparisonStream.ComparisonStreamDelta) => void;
+      const callbacks: Record<string, DeltaCallback> = {};
+      const deferreds: Record<string, Deferred<comparisonStream.ComparisonStreamResult>> = {
+        'test/model-1': createDeferred(),
+        'test/model-2': createDeferred(),
+        'test/model-3': createDeferred(),
+      };
+
+      streamAnswerSpy.mockImplementation(
+        (
+          input: { prompt: string; modelId: string },
+          _signal: AbortSignal,
+          onDelta?: (delta: comparisonStream.ComparisonStreamDelta) => void,
+        ) => {
+          if (onDelta) callbacks[input.modelId] = onDelta;
+          return deferreds[input.modelId].promise;
+        },
+      );
+
+      render(<ComparePage />);
+      await screen.findByRole('tablist', { name: 'Модели для сравнения' });
+
+      // In empty state, tablist is rendered
+      const tabs = screen.getAllByRole('tab');
+      expect(tabs).toHaveLength(3);
+      expect(tabs[0]).toHaveAttribute('aria-selected', 'true');
+      expect(tabs[1]).toHaveAttribute('aria-selected', 'false');
+
+      // Send prompt
+      const input = screen.getByRole('textbox');
+      await user.type(input, 'Mobile test prompt');
+      await user.click(screen.getByRole('button', { name: /отправить вопрос/i }));
+
+      // All 3 models called
+      expect(streamAnswerSpy).toHaveBeenCalledTimes(3);
+
+      // Model 1 receives delta
+      act(() => {
+        callbacks['test/model-1']({ type: 'text-delta', delta: 'Model 1 response text' });
+      });
+      expect(screen.getByText('Model 1 response text')).toBeInTheDocument();
+
+      // Model 2 receives delta in background (hidden)
+      act(() => {
+        callbacks['test/model-2']({ type: 'text-delta', delta: 'Model 2 background delta' });
+      });
+
+      // Switch to tab 2
+      await user.click(screen.getAllByRole('tab')[1]);
+
+      // No new streamAnswer calls made on tab switch!
+      expect(streamAnswerSpy).toHaveBeenCalledTimes(3);
+
+      // Model 2's background delta is now visible!
+      expect(screen.getByText('Model 2 background delta')).toBeVisible();
+
+      // Resolve model 2
+      await act(async () => {
+        deferreds['test/model-2'].resolve({ durationMs: 1500, costUsd: 0.003 });
+      });
+
+      expect(screen.getByText('1,5 с')).toBeInTheDocument();
+      expect(screen.getByText('$0,0030')).toBeInTheDocument();
+    });
+
+    it('falls back active model index correctly when active model is removed', async () => {
+      const user = userEvent.setup();
+      fetchModelsSpy.mockResolvedValue(testCatalog.slice(0, 3));
+      streamAnswerSpy.mockReturnValue(new Promise(() => {}));
+
+      render(<ComparePage />);
+      await screen.findByRole('tablist', { name: 'Модели для сравнения' });
+
+      // Send prompt to render turns and AnswerCells
+      const input = screen.getByRole('textbox');
+      await user.type(input, 'Turn prompt');
+      await user.click(screen.getByRole('button', { name: /отправить вопрос/i }));
+
+      const tabs = screen.getAllByRole('tab');
+      // Click model 2 (index 1)
+      await user.click(tabs[1]);
+      expect(tabs[1]).toHaveAttribute('aria-selected', 'true');
+
+      // Remove model 2 via ModelHeader remove button
+      const removeBtn = screen.getByRole('button', { name: 'Удалить модель Model Two' });
+      await user.click(removeBtn);
+
+      // Remaining models: [Model One, Model Three]. Model Three is now at index 1 -> becomes active!
+      const updatedTabs = screen.getAllByRole('tab');
+      expect(updatedTabs).toHaveLength(2);
+      expect(updatedTabs[1]).toHaveAttribute('aria-selected', 'true');
+      expect(updatedTabs[1]).toHaveAttribute('aria-label', 'Model Three (Provider C)');
+    });
+  });
 });

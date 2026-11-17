@@ -12,7 +12,8 @@
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "smoke:proxy": "tsx scripts/smoke-proxy.ts",
-    "test": "node --import tsx --test test/*.test.ts"
+    "test": "node --import tsx --test test/*.test.ts",
+    "test:integration": "node --import tsx ../frontend/scripts/backend-integration.mjs"
   },
   "dependencies": {
     "fastify": "^5.12.8"

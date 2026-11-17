@@ -7,6 +7,15 @@
   gap: 14px;
 }
 
+.cell[hidden] {
+  display: none !important;
+}
+
+.mobileModelHeader {
+  width: 100%;
+  margin-bottom: 4px;
+}
+
 .desktopContent > :last-child {
   margin-bottom: 0;
 }
@@ -60,6 +69,7 @@
   transition:
     background-color 0.15s ease,
     border-color 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .cellStopButton:hover {
@@ -90,4 +100,15 @@
   font-size: 14px;
   line-height: 1.5;
   color: var(--color-text-secondary);
+}
+
+@media (max-width: 1279px) {
+  .cellStopButton {
+    min-height: 44px;
+    padding-inline: 14px;
+  }
+  .cell {
+    padding: 16px 0 24px;
+    gap: 12px;
+  }
 }

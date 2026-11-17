@@ -4,6 +4,7 @@ import { AnswerContent } from './AnswerContent.js';
 import { AnswerError } from './AnswerError.js';
 import { AnswerStatus } from './AnswerStatus.js';
 import { ThoughtStatus } from './ThoughtStatus.js';
+import { ModelHeader } from './ModelHeader.js';
 import { Button } from '../../../components/ui/Button.js';
 import styles from './AnswerCell.module.css';
 
@@ -14,9 +15,27 @@ export type AnswerCellProps = {
   onRetry: () => void;
   onStop?: () => void;
   className?: string;
+  panel?: {
+    id: string;
+    labelledBy: string;
+    hidden: boolean;
+  };
+  mobileModelControls?: {
+    onRemove: () => void;
+    removeDisabled: boolean;
+  };
 };
 
-export function AnswerCell({ model, turnId, answer, onRetry, onStop, className }: AnswerCellProps) {
+export function AnswerCell({
+  model,
+  turnId,
+  answer,
+  onRetry,
+  onStop,
+  className,
+  panel,
+  mobileModelControls,
+}: AnswerCellProps) {
   const cellId = `cell-${model.id}-${turnId}`;
   const isBusy = answer?.state === 'pending' || answer?.state === 'streaming';
 
@@ -25,7 +44,9 @@ export function AnswerCell({ model, turnId, answer, onRetry, onStop, className }
   const stopHadFocusRef = useRef(false);
   const prevStateRef = useRef<string | undefined>(undefined);
 
-  if (stopButtonRef.current && document.activeElement === stopButtonRef.current) {
+  if (panel?.hidden) {
+    stopHadFocusRef.current = false;
+  } else if (stopButtonRef.current && document.activeElement === stopButtonRef.current) {
     stopHadFocusRef.current = true;
   }
 
@@ -33,6 +54,11 @@ export function AnswerCell({ model, turnId, answer, onRetry, onStop, className }
     const prevState = prevStateRef.current;
     const currentState = answer?.state;
     prevStateRef.current = currentState;
+
+    if (panel?.hidden) {
+      stopHadFocusRef.current = false;
+      return;
+    }
 
     if (
       (prevState === 'pending' || prevState === 'streaming') &&
@@ -56,12 +82,22 @@ export function AnswerCell({ model, turnId, answer, onRetry, onStop, className }
     } else if (!isBusy) {
       stopHadFocusRef.current = false;
     }
-  }, [answer?.state, isBusy]);
+  }, [answer?.state, isBusy, panel?.hidden]);
 
   const costDescription =
     answer?.state === 'success' && answer.costLabel
       ? `Оценочная стоимость: ${answer.costLabel}. Стандартные тарифы; кэш и специальные тарифы не учтены.`
       : undefined;
+
+  const panelProps = panel
+    ? {
+        id: panel.id,
+        role: 'tabpanel',
+        'aria-labelledby': panel.labelledBy,
+        tabIndex: 0,
+        hidden: panel.hidden,
+      }
+    : {};
 
   if (!answer) {
     return (
@@ -69,7 +105,19 @@ export function AnswerCell({ model, turnId, answer, onRetry, onStop, className }
         className={`${styles.cell} ${className || ''}`}
         aria-label={`Нет ответа: ${model.name}`}
         data-testid={cellId}
+        {...panelProps}
       >
+        {mobileModelControls && (
+          <div className={styles.mobileModelHeader}>
+            <ModelHeader
+              compact
+              name={model.name}
+              provider={model.provider}
+              removeDisabled={mobileModelControls.removeDisabled}
+              onRemove={mobileModelControls.onRemove}
+            />
+          </div>
+        )}
         <div className={styles.missingPlaceholder}>Модель добавлена после этого вопроса.</div>
       </div>
     );
@@ -99,7 +147,34 @@ export function AnswerCell({ model, turnId, answer, onRetry, onStop, className }
       aria-label={`${model.name}, ${turnId}`}
       aria-busy={isBusy}
       data-testid={cellId}
+      {...panelProps}
     >
+      {mobileModelControls && (
+        <div className={styles.mobileModelHeader}>
+          <ModelHeader
+            compact
+            name={model.name}
+            provider={model.provider}
+            removeDisabled={mobileModelControls.removeDisabled}
+            onRemove={mobileModelControls.onRemove}
+          />
+        </div>
+      )}
+
+      {mobileModelControls && answer.state === 'success' && (
+        <div className={styles.metadata}>
+          {answer.durationLabel}
+          {answer.costLabel && (
+            <>
+              {' · '}
+              <span title={costDescription} aria-label={costDescription}>
+                {answer.costLabel}
+              </span>
+            </>
+          )}
+        </div>
+      )}
+
       {hasReasoning && (
         <ThoughtStatus
           key={answer.requestId}
@@ -130,7 +205,7 @@ export function AnswerCell({ model, turnId, answer, onRetry, onStop, className }
             aria-label={`Остановить ответ: ${model.name}`}
             onClick={onStop}
             onFocus={() => {
-              stopHadFocusRef.current = true;
+              if (!panel?.hidden) stopHadFocusRef.current = true;
             }}
             onBlur={() => {
               stopHadFocusRef.current = false;
@@ -142,7 +217,7 @@ export function AnswerCell({ model, turnId, answer, onRetry, onStop, className }
         </>
       )}
 
-      {answer.state === 'success' && (
+      {!mobileModelControls && answer.state === 'success' && (
         <div className={styles.metadata}>
           {answer.durationLabel}
           {answer.costLabel && (

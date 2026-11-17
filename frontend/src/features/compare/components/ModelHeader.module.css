@@ -54,3 +54,18 @@
 .closeIconButton:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.16);
 }
+
+.compact {
+  padding: 0;
+  min-height: 44px;
+}
+
+.compact .closeIconButton {
+  width: 44px;
+  height: 44px;
+  background: radial-gradient(circle, var(--color-bg-control) 16px, transparent 16px);
+}
+
+.compact .closeIconButton:hover:not(:disabled) {
+  background: radial-gradient(circle, rgb(255 255 255 / 16%) 16px, transparent 16px);
+}

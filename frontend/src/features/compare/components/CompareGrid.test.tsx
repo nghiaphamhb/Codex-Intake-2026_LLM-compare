@@ -6,6 +6,23 @@ import { desktopModels, desktopTurns } from '../desktopFixtures';
 import type { CompareTurn } from '../types';
 
 describe('CompareGrid', () => {
+  it('lets mobile users remove a selected model before spending a first generation request', async () => {
+    const onAction = vi.fn();
+    render(
+      <CompareGrid
+        models={desktopModels}
+        turns={[]}
+        onAction={onAction}
+        isNarrow
+        activeModelId={desktopModels[0].id}
+      />,
+    );
+    await userEvent.click(
+      screen.getByRole('button', { name: `Удалить модель ${desktopModels[0].name}` }),
+    );
+    expect(onAction).toHaveBeenCalledWith({ type: 'remove-model', modelId: desktopModels[0].id });
+    expect(screen.getByText('Задайте вопрос, чтобы начать сравнение.')).toBeVisible();
+  });
   it.each([2, 3, 4])('maps literal answers to the correct column for %i models', (count) => {
     const models = [
       { id: 'a', name: 'Alpha', provider: 'Test' },
@@ -215,5 +232,54 @@ describe('CompareGrid', () => {
       turnId: 'turn-stop-test',
       modelId: 'claude-demo',
     });
+  });
+
+  it('renders mobile tabs and hides desktop modelBar when isNarrow is true', () => {
+    const onSelect = vi.fn();
+    const onAdd = vi.fn();
+
+    render(
+      <CompareGrid
+        models={desktopModels}
+        turns={desktopTurns}
+        onAction={vi.fn()}
+        isNarrow={true}
+        activeModelId={desktopModels[0].id}
+        onSelectModel={onSelect}
+        onAddModel={onAdd}
+      />,
+    );
+
+    // Desktop model bar should not be present
+    expect(screen.queryByRole('heading', { name: desktopModels[0].name })).not.toBeInTheDocument();
+
+    // Mobile tabs are rendered for each turn
+    const tablists = screen.getAllByRole('tablist', { name: 'Модели для сравнения' });
+    expect(tablists).toHaveLength(desktopTurns.length);
+
+    // Only active model's panel is visible (not hidden)
+    const activePanels = screen.getAllByTestId(`cell-${desktopModels[0].id}-${desktopTurns[0].id}`);
+    expect(activePanels[0]).not.toHaveAttribute('hidden');
+
+    const inactivePanels = screen.getAllByTestId(
+      `cell-${desktopModels[1].id}-${desktopTurns[0].id}`,
+    );
+    expect(inactivePanels[0]).toHaveAttribute('hidden');
+  });
+
+  it('renders mobile empty tabs and empty panel when turns is empty and isNarrow is true', () => {
+    render(
+      <CompareGrid
+        models={desktopModels}
+        turns={[]}
+        onAction={vi.fn()}
+        isNarrow={true}
+        activeModelId={desktopModels[0].id}
+      />,
+    );
+
+    const tablist = screen.getByRole('tablist', { name: 'Модели для сравнения' });
+    expect(tablist).toBeInTheDocument();
+    expect(screen.getByText('Задайте вопрос, чтобы начать сравнение.')).toBeInTheDocument();
   });
 });
