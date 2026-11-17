@@ -4,6 +4,10 @@ Compare responses from 2–4 LLMs side by side, with parallel requests, Markdown
 
 Built with React, TypeScript, Vite and Fastify. Supports desktop and mobile layouts.
 
+## Live Demo
+
+Try the app: [https://minishopru.bond](https://minishopru.bond)
+
 ## Run locally
 
 Requires **Node.js 24.x**, npm and a valid CodeX AI Proxy key.
