@@ -44,10 +44,89 @@
   gap: 8px;
 }
 
+@media (max-width: 1279px) {
+  .actions {
+    display: none !important;
+  }
+}
+
 .buttonIcon {
   width: 16px;
   height: 16px;
   display: inline-block;
-  vertical-align: middle;
 }
 
+/* Mobile 2-row layout */
+.mobileHeader {
+  width: 100%;
+  box-sizing: border-box;
+  border-bottom: 1px solid var(--color-stroke);
+  padding: 8px 8px 8px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background-color: var(--color-bg-primary);
+}
+
+.mobileMainRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.mobileShareButton {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  color: var(--color-text-primary);
+  transition: background-color 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mobileShareButton:hover {
+  background-color: var(--color-bg-control);
+}
+
+.mobileShareButton:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.mobileShareIcon {
+  width: 20px;
+  height: 20px;
+  display: block;
+}
+
+.mobileSubRow {
+  display: flex;
+  justify-content: flex-end;
+  width: 100%;
+}
+
+.mobileNewButton {
+  min-height: 44px;
+  padding: 0 16px;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

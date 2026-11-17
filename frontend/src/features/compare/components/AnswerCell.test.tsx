@@ -344,4 +344,112 @@ describe('AnswerCell', () => {
     const retryBtn = screen.getByRole('button', { name: 'Повторить' });
     expect(document.activeElement).toBe(retryBtn);
   });
+
+  it('renders tabpanel attributes when panel prop is passed, and omits them when absent', () => {
+    const { rerender } = render(
+      <AnswerCell
+        model={model}
+        turnId="turn-1"
+        answer={{ state: 'success', markdown: 'Done', durationLabel: '1.0s' }}
+        onRetry={vi.fn()}
+        panel={{
+          id: 'test-panel-0',
+          labelledBy: 'test-tab-0',
+          hidden: false,
+        }}
+      />,
+    );
+
+    const cell = screen.getByTestId('cell-claude-demo-turn-1');
+    expect(cell).toHaveAttribute('role', 'tabpanel');
+    expect(cell).toHaveAttribute('id', 'test-panel-0');
+    expect(cell).toHaveAttribute('aria-labelledby', 'test-tab-0');
+    expect(cell).toHaveAttribute('tabindex', '0');
+    expect(cell).not.toHaveAttribute('hidden');
+
+    // Desktop mode without panel prop
+    rerender(
+      <AnswerCell
+        model={model}
+        turnId="turn-1"
+        answer={{ state: 'success', markdown: 'Done', durationLabel: '1.0s' }}
+        onRetry={vi.fn()}
+      />,
+    );
+    expect(cell).not.toHaveAttribute('role');
+    expect(cell).not.toHaveAttribute('aria-labelledby');
+    expect(cell).not.toHaveAttribute('tabindex');
+  });
+
+  it('renders ModelHeader and top metadata when mobileModelControls is provided', () => {
+    render(
+      <AnswerCell
+        model={model}
+        turnId="turn-1"
+        answer={{
+          state: 'success',
+          markdown: 'Done',
+          durationLabel: '1.5 с',
+          costLabel: '$0.002',
+        }}
+        onRetry={vi.fn()}
+        panel={{
+          id: 'test-panel-0',
+          labelledBy: 'test-tab-0',
+          hidden: false,
+        }}
+        mobileModelControls={{
+          onRemove: vi.fn(),
+          removeDisabled: false,
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByRole('button', { name: `Удалить модель ${model.name}` }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/1\.5 с/)).toBeInTheDocument();
+    expect(screen.getByText('$0.002')).toBeInTheDocument();
+  });
+
+  it('does not transfer focus to Retry when panel is hidden', () => {
+    const { rerender } = render(
+      <AnswerCell
+        model={model}
+        turnId="turn-1"
+        answer={{ state: 'pending', requestId: 'req-1' }}
+        onRetry={vi.fn()}
+        onStop={vi.fn()}
+        panel={{
+          id: 'test-panel-0',
+          labelledBy: 'test-tab-0',
+          hidden: true,
+        }}
+      />,
+    );
+
+    // Transition to stopped while hidden
+    rerender(
+      <AnswerCell
+        model={model}
+        turnId="turn-1"
+        answer={{
+          state: 'stopped',
+          requestId: 'req-1',
+          markdown: 'Partial',
+          reasoning: '',
+        }}
+        onRetry={vi.fn()}
+        onStop={vi.fn()}
+        panel={{
+          id: 'test-panel-0',
+          labelledBy: 'test-tab-0',
+          hidden: true,
+        }}
+      />,
+    );
+
+    const retryBtn = screen.getByRole('button', { name: 'Повторить', hidden: true });
+    expect(document.activeElement).not.toBe(retryBtn);
+  });
 });

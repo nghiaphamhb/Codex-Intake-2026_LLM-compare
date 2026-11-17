@@ -75,3 +75,43 @@
   color: var(--color-text-secondary);
   font-size: 15px;
 }
+
+.emptyPanelsContainer {
+  width: 100%;
+}
+
+.emptyTurnPanel[hidden] {
+  display: none !important;
+}
+
+@media (max-width: 1279px) {
+  .gridContainer {
+    width: 100%;
+  }
+
+  .firstTurnQuestion {
+    padding: 16px 0 12px;
+  }
+
+  .turnQuestion {
+    padding: 24px 0 12px;
+  }
+
+  .questionBubbleWrapper {
+    width: 300px;
+    max-width: 100%;
+  }
+
+  .answersRow {
+    display: block;
+    width: 100%;
+  }
+
+  .cellWithBorder {
+    border-left: none;
+  }
+
+  .emptyTurns {
+    padding: 48px 16px;
+  }
+}

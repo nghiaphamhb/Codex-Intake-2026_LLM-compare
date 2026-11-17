@@ -7,6 +7,7 @@ export type ModelHeaderProps = {
   onRemove?: () => void;
   removeDisabled?: boolean;
   className?: string;
+  compact?: boolean;
 };
 
 export function ModelHeader({
@@ -15,9 +16,10 @@ export function ModelHeader({
   onRemove,
   removeDisabled = false,
   className,
+  compact = false,
 }: ModelHeaderProps) {
   return (
-    <div className={`${styles.header} ${className || ''}`}>
+    <div className={`${styles.header} ${compact ? styles.compact : ''} ${className || ''}`}>
       <div className={styles.info}>
         <span className={styles.name} title={name}>
           {name}

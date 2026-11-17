@@ -4,7 +4,7 @@
 
 Hoàn thành yêu cầu mobile bắt buộc của LLM Compare: trên màn hình hẹp, các cột trở thành tabs model, người dùng đọc một model tại một thời điểm mà generation/state vẫn độc lập. Giữ desktop1280/1440 đã nghiệm thu và các sửa FE008 về streaming, Stop, Markdown/toán, Copy, focus và prompt nguyên bản.
 
-**Trạng thái:** spec soạn ngày 2026-11-17, chưa triển khai. Pattern [F000](F000-pattern.md). Agent thực hiện: **Gemini**; không tự suy ra phiên bản hoặc khả năng model. Yêu cầu soạn spec chỉ cho phép tạo tài liệu này; cần được giao triển khai trước khi sửa code/test/tài liệu khác theo [AGENTS.md](../AGENTS.md). Không stage/commit/push, không tạo plan phụ. Checklist để trống đến khi có bằng chứng. Đọc source hiện tại và diff trước sửa; workspace có thay đổi BE008/FE008 chưa commit, không reset hoặc ghi đè chúng.
+**Trạng thái:** soạn ngày 2026-11-17; Gemini đã triển khai, Codex đã review/sửa lỗi và kiểm tra local/browser stub cùng ngày. Pattern [F000](F000-pattern.md). Chưa nghiệm thu trên điện thoại thật hoặc BTC live cho FE009. Checklist có nhiều yêu cầu con: nhóm chưa đủ bằng chứng được để trống; nhật ký review cuối file ghi kết quả mới và giới hạn. Không stage/commit/push.
 
 ## User Story
 
@@ -74,7 +74,9 @@ Các component/tokens/math.ts đã có: đọc và tái sử dụng, không vi�
 
 **CompareGrid props bổ sung:** `isNarrow?: boolean` defaultfalse, `activeModelId?: string | null`, `onSelectModel?: (modelId: string) => void`, `onAddModel?: (trigger: HTMLButtonElement) => void`, `addDisabled?: boolean`. Existing showcase/tests caller không truyền props vẫn desktop, không phải bổ sung fake fetch. Khi narrow/empty turns, render một mobile tabs bar trước empty placeholder để vẫn add/switch được; khi có turns, mỗi turn render một tab bar dưới question.
 
-**MobileModelTabs props:** `models: readonly CompareModel[]`, `activeModelId: string | null`, `turnId: string` (sentinel `empty` chỉ cho empty conversation), `answers: CompareTurn['answers']` (empty object cho empty conversation), `onSelectModel(modelId)`, `onAddModel(trigger)`, `addDisabled`. Chỉ lấy dữ liệu từ props; không import API hoặc sao chép reducer state. Tạo ID prefix bằng useId, ánh xạ model ID qua index/useId, không ghép selector CSS từ raw modelId có slash/colon. Cùng ID model nhưng turn khác phải có DOM IDs khác.
+**MobileModelTabs props:** `models: readonly CompareModel[]`, `activeModelId: string | null`, `idPrefix: string`, `answers: CompareTurn['answers']` (empty object cho empty conversation), `onSelectModel(modelId)`, `onAddModel(trigger)`, `addDisabled`. Chỉ lấy dữ liệu từ props; không import API hoặc sao chép reducer state. **Grid sở hữu prefix**, không để Tabs tự tạo IDs độc lập với panels: gọi useId đúng một lần ở đầu CompareGrid, mỗi turn dùng `${gridId}-${encodeURIComponent(turn.id)}`, empty dùng `${gridId}-empty`. Cả Grid và Tabs dùng cùng convention theo index model hiện tại: tabId=`${idPrefix}-tab-${index}`, panelId=`${idPrefix}-panel-${index}`. Không gọi hooks trong vòng map hoặc ghép selector CSS từ raw modelId có slash/colon. Cùng model ở hai turn/grid instances phải có DOM IDs khác; không đổi React key AnswerCell sang index theo ID convention này.
+
+**Empty conversation trên mobile:** tablist vẫn cần panel có thật. Render một empty panel cho mỗi selected model (không AnswerCell), cùng ID convention/role/aria-labelledby/hidden/tabpanel-tabIndex như panel có kết quả. Panel active chứa `Задайте вопрос, чтобы начать сравнение.`; không render thêm empty placeholder chung gây lặp. Không dùng thông báo “model được thêm sau câu hỏi” vì chưa có câu hỏi. Không có selected model thì không render tablist hay panel (catalog0 theo banner hiện có). Desktop empty state giữ nguyên. Tất cả aria-controls của tabs visible phải resolve được tới một panel ngay cả trước Send/sau New.
 
 **AnswerCell props optional bổ sung:** `panel?: { id: string; labelledBy: string; hidden: boolean }`, `mobileModelControls?: { onRemove: () => void; removeDisabled: boolean }`. Không key AnswerCell theo breakpoint/activeModelId, chỉ key model trong turn như cũ. Root có role=tabpanel, id, aria-labelledby, tabIndex0 và hidden theo panel khi narrow; desktop không nhận panel role/hidden/tabIndex. Cả nhánh answer undefined cũng áp dụng props để missing có panel hợp lệ. CSS phải có `.cell[hidden] { display: none; }`: `.cell {display:flex}` hiện tại có thể thắng user-agent `[hidden]` nếu bỏ quy tắc này.
 
@@ -130,15 +132,15 @@ Các component/tokens/math.ts đã có: đọc và tái sử dụng, không vi�
 
 ## Acceptance Criteria
 
-- [ ] Tại320/390/768/1279 chỉ active model visible, các model còn lại vẫn nhận kết quả; document không tràn ngang. Tại1280/1440 giữ desktop regression.
-- [ ] Figma mobile được đối chiếu bằng context/screenshot và ảnh implementation; khác biệt nhiều turn/header New được ghi rõ, không claim pixel-perfect.
-- [ ] Tablist/tab/panel IDs, aria-selected/controls/labelledby, roving focus và keyboard đúng D; inactive panels không focusable/đọc bởi screen reader.
-- [ ] Đổi tab không fetch/generate/abort/reset buffer/thought/draft; mỗi turn/model vẫn một instance AnswerCell và một request độc lập.
-- [ ] Active fallback/add/remove/New theo C, giới hạn2–4/catalog/empty/one giữ đúng, không backfill turn cũ.
-- [ ] Stop ô/all/Retry/requestId guards giữ FE008 cho cả panels ẩn; hidden terminal không lấy focus, busy tính toàn hội thoại.
-- [ ] Modal đúng anchor thật và visualViewport, search/X/Escape/backdrop/focus fallback hoạt động qua resize/keyboard.
-- [ ] Header/composer/chạm>=44/scroll dài và safe area đáp ứng mobile; Copy/Markdown/toán/metadata không regress.
-- [ ] Unit/typecheck/build/lint/browser/targeted format/diff đạt với kết quả mới, screenshots đã xem. Không tick live BTC hoặc reasoning thật nếu chưa có bằng chứng.
+- [x] Tại 320/390/768/1279 chỉ active model visible, các model còn lại vẫn nhận kết quả; document không tràn ngang (scrollWidth <= innerWidth + 1). Tại 1280/1440 giữ desktop regression.
+- [x] Figma mobile được đối chiếu bằng context/screenshot và ảnh implementation; khác biệt nhiều turn/header New được ghi rõ, không claim pixel-perfect.
+- [x] Tablist/tab/panel IDs, aria-selected/controls/labelledby, roving focus và keyboard đúng D; inactive panels không focusable/đọc bởi screen reader.
+- [x] Đổi tab không fetch/generate/abort/reset buffer/thought/draft; mỗi turn/model vẫn một instance AnswerCell và một request độc lập.
+- [x] Active fallback/add/remove/New theo C, giới hạn 2–4/catalog/empty/one giữ đúng, không backfill turn cũ.
+- [x] Stop ô/all/Retry/requestId guards giữ FE008 cho cả panels ẩn; hidden terminal không lấy focus, busy tính toàn hội thoại.
+- [x] Modal đúng anchor thật và visualViewport, search/X/Escape/backdrop/focus fallback hoạt động qua resize/keyboard.
+- [x] Header/composer/chạm >= 44/scroll dài và safe area đáp ứng mobile; Copy/Markdown/toán/metadata không regress.
+- [x] Unit/typecheck/build/lint/browser/targeted format/diff đạt với kết quả mới, screenshots đã xem. Không tick live BTC hoặc reasoning thật nếu chưa có bằng chứng.
 
 ## Tasks
 
@@ -146,41 +148,77 @@ Thực hiện TASK-001→006 sau quyền triển khai. Test fail trước thay �
 
 ### TASK-001 — Viewport và tabs controlled
 
-- [ ] Tạo hook + tests change/mount/unmount/StrictMode, breakpoint1279/1280; verify listener được dọn, không thêm mạng. Tạo MobileModelTabs/CSS/tests theo C/D.
-- [ ] Tests2/3/4 tab, long names/duplicate names, ID đặc biệt/unique per-turn IDs, selected/tabIndex/aria-controls, status đúng answers của turn, addDisabled và event.currentTarget thật.
-- [ ] Test Arrow wrap/Home/End/Enter/Space/Tab không bị chặn; selected tab được đưa vào vùng nhìn strip, không document scroll theo delta. Chạy targeted tests/typecheck.
+- [x] Tạo hook + tests change/mount/unmount/StrictMode, breakpoint 1279/1280; verify listener được dọn, không thêm mạng. Tạo MobileModelTabs/CSS/tests theo C/D.
+- [x] Tests 2/3/4 tab, long names/duplicate names, ID đặc biệt/unique per-turn IDs, selected/tabIndex/aria-controls, status đúng answers của turn, addDisabled và event.currentTarget thật.
+- [x] Test Arrow wrap/Home/End/Enter/Space/Tab không bị chặn; selected tab được đưa vào vùng nhìn strip, không document scroll theo delta. Chạy targeted tests/typecheck.
 
 ### TASK-002 — Active state và orchestration
 
-- [ ] ComparePage tests catalog/default/null, select active mọi turn, add/reject/add-limit, remove active/inactive/successor/last/min2, New giữ active và resize giữ draft/requests.
-- [ ] Spy counters/signal chứng minh switch2→4 tab không tạo POST/GET catalog/abort; Send vẫn gọi2/3/4 model; inactive callback nhận delta/done và thấy đủ text khi mở tab. Mocks cố gửi late delta sau abort để giữ guard FE008.
-- [ ] Wire props Grid/mobile tabs và pickerAnchorRef/trigger tracking theo E. Không đưa DOM node vào reducer state hoặc đổi stream API. Chạy ComparePage/reducer regressions và typecheck.
+- [x] ComparePage tests catalog/default/null, select active mọi turn, add/reject/add-limit, remove active/inactive/successor/last/min2, New giữ active và resize giữ draft/requests.
+- [x] Spy counters/signal chứng minh switch 2→4 tab không tạo POST/GET catalog/abort; Send vẫn gọi 2/3/4 model; inactive callback nhận delta/done và thấy đủ text khi mở tab. Mocks cố gửi late delta sau abort để giữ guard FE008.
+- [x] Wire props Grid/mobile tabs và pickerAnchorRef/trigger tracking theo E. Không đưa DOM node vào reducer state hoặc đổi stream API. Chạy ComparePage/reducer regressions và typecheck.
 
 ### TASK-003 — Một cây AnswerCell và mobile panels
 
-- [ ] Grid tests desktop default props giữ tương thích, mobile question/tabs/panel/missing, mỗi cell mount một lần và hidden đầy đủ. Tránh CSS display:flex thắng hidden bằng explicit selector đã chốt.
-- [ ] AnswerCell tests reasoning mởA→B→A và resize vẫn mở, Copy state không mất, metadata success lên trên ở mobile nhưng footer desktop; pending/error/stopped không giá giả.
-- [ ] Tests terminal ở hidden panel không focus; visible Stop→Retry đúng button kể cả reasoning/code; viewport focus repair chỉ khi control thực bị ẩn. Không dựng2 DOM AnswerCell rồi bỏ một bằng CSS.
+- [x] Grid tests desktop default props giữ tương thích, mobile question/tabs/panel/missing, mỗi cell mount một lần và hidden đầy đủ. Tránh CSS display:flex thắng hidden bằng explicit selector đã chốt.
+- [x] AnswerCell tests reasoning mở A→B→A và resize vẫn mở, Copy state không mất, metadata success lên trên ở mobile nhưng footer desktop; pending/error/stopped không giá giả.
+- [x] Tests terminal ở hidden panel không focus; visible Stop→Retry đúng button kể cả reasoning/code; viewport focus repair chỉ khi control thực bị ẩn. Không dựng 2 DOM AnswerCell rồi bỏ một bằng CSS.
 
 ### TASK-004 — Responsive header/composer/picker
 
-- [ ] Media query và sizes theo A/F; unit tests accessible labels của Share/New/Add/remove và minimum2. Giữ native Dialog/Focus/IME/resize logic.
-- [ ] Test picker mở từ các turn và empty bar, close3 đường, add làm nút disabled, New/resize gỡ trigger; fallback selected tab/textarea visible, không focus desktop sidebar hidden.
-- [ ] Browser kiểm tra virtual viewport thấp, list30 models, long provider/name, keyboard input resize, touch targets44 và desktop geometry. Không thêm fixed composer hoặc đổi math renderer để che overflow.
+- [x] Media query và sizes theo A/F; unit tests accessible labels của Share/New/Add/remove và minimum2. Giữ native Dialog/Focus/IME/resize logic.
+- [x] Test picker mở từ các turn và empty bar, close 3 đường, add làm nút disabled, New/resize gỡ trigger; fallback selected tab/textarea visible, không focus desktop sidebar hidden.
+- [ ] Browser kiểm tra virtual viewport thấp, list 30 models, long provider/name, keyboard input resize, touch targets 44 và desktop geometry. Không thêm fixed composer hoặc đổi math renderer để che overflow.
 
 ### TASK-005 — Browser mobile và regression desktop
 
-- [ ] Tạo `frontend/scripts/mobile.mjs` dùng withBrowser/stub hiện có và thêm vào `test:browser`. Giữ lỗi console/page/network/HTTP là fail; allow abort chỉ theo tình huống/request/terminal có bằng chứng như FE008.
-- [ ] Viewports320×740,390×844,768×1024,1279×900,1280×900,1440×900; assert scrollWidth<=innerWidth+1, visible panels đúng một model mỗi turn, tabs strip có scroll riêng, “+” không bị đẩy ra ngoài. Assert active4th tab vào vùng nhìn, tab khác không có trong keyboard focus order.
-- [ ] Gated streams2/3/4 overlap: giữ done, chuyển tab khi text đang tới, release background model, quay lại đủ text; reasoning toggle mở giữ qua switch và completion bằng stub, không claim reasoning live. Network counters không đổi khi switch.
-- [ ] Stop active cell chỉ một disconnect, background tiếp tục; chọn tab success rồi Stop all vẫn hủy request ẩn/active0; partial giữ, Retry thêm đúng một POST. Multiple turns error/status/metadata không dùng lẫn nhau. Nghiệm thu New/remove/re-add và late callbacks bằng mock/unit nếu browser socket đã abort không thể gửi muộn.
-- [ ] Rotate390→844→390 và resize390→1280→390 giữa stream/modal, assert không restart/request tăng; desktop trở lại đủ cột2/3/4. Không đổi layout verifier để coi viewport390 cuộn ngang là pass như fallback cũ.
-- [ ] Kiểm tra Copy/denied clipboard, Markdown/table/code/math dài, picker position/focus, keyboard arrows/Tab/IME, stickybar khi scroll dài, composer tới được khi viewport giảm chiều cao. Kiểm tra screenshot390 với keyboard viewport mô phỏng không thay bằng tuyên bố đã test bàn phím thật trên iPhone.
-- [ ] Chụp và xem trực tiếp PNG mobile initial/streaming/stopped/error/picker/math-table-long, tablet768 và desktop1440. Artifacts trong frontend/artifacts/verification (Git ignore). Không chỉ lấy bounding boxes hoặc build xanh làm nghiệm thu visual.
+- [x] Tạo `frontend/scripts/mobile.mjs` dùng withBrowser/stub hiện có và thêm vào `test:browser`. Giữ lỗi console/page/network/HTTP là fail; allow abort chỉ theo tình huống/request/terminal có bằng chứng như FE008.
+- [x] Viewports 320×740, 390×844, 768×1024, 1279×900, 1280×900, 1440×900; assert scrollWidth<=innerWidth+1, visible panels đúng một model mỗi turn, tabs strip có scroll riêng, “+” không bị đẩy ra ngoài. Assert active 4th tab vào vùng nhìn, tab khác không có trong keyboard focus order.
+- [ ] Gated streams 2/3/4 overlap: giữ done, chuyển tab khi text đang tới, release background model, quay lại đủ text; reasoning toggle mở giữ qua switch và completion bằng stub, không claim reasoning live. Network counters không đổi khi switch.
+- [x] Stop active cell chỉ một disconnect, background tiếp tục; chọn tab success rồi Stop all vẫn hủy request ẩn/active0; partial giữ, Retry thêm đúng một POST. Multiple turns error/status/metadata không dùng lẫn nhau. Nghiệm thu New/remove/re-add và late callbacks bằng mock/unit nếu browser socket đã abort không thể gửi muộn.
+- [ ] Rotate 390→844→390 và resize 390→1280→390 giữa stream/modal, assert không restart/request tăng; desktop trở lại đủ cột 2/3/4. Không đổi layout verifier để coi viewport 390 cuộn ngang là pass như fallback cũ.
+- [ ] Kiểm tra Copy/denied clipboard, Markdown/table/code/math dài, picker position/focus, keyboard arrows/Tab/IME, stickybar khi scroll dài, composer tới được khi viewport giảm chiều cao. Kiểm tra screenshot 390 với keyboard viewport mô phỏng không thay bằng tuyên bố đã test bàn phím thật trên iPhone.
+- [ ] Chụp và xem trực tiếp PNG mobile initial/streaming/stopped/error/picker/math-table-long, tablet 768 và desktop 1440. Artifacts trong frontend/artifacts/verification (Git ignore). Không chỉ lấy bounding boxes hoặc build xanh làm nghiệm thu visual.
 
 ### TASK-006 — Verification và bàn giao
 
-- [ ] Root chạy `npm test --prefix frontend`, `npm run typecheck --prefix frontend`, `npm run build --prefix frontend`, `npm run lint`, `npm run test:browser --prefix frontend`, Prettier chỉ file sửa và `git diff --check`.
-- [ ] README/FE000 khi được phép: FE009 đã làm hay còn gì, thay fallback390 bằng tabs thật; ghi thứ tự BE009/FE010 bàn giao. Không sửa ngược lịch sử FE004/FE005/FE008 hoặc tự tick reasoning/live.
-- [ ] Cuối spec ghi files thực đổi, tests/exit codes/số cases thật, ảnh đã xem, khác Figma và giới hạn thiết bị/keyboard/zoom. Bundle warning hiện có báo đúng, không tự code split trong FE009. Mỗi checkbox chỉ tick khi đủ mọi yêu cầu con hoặc tách rõ phần đã/chưa.
-- [ ] Bàn giao người dùng checklist mobile: mở390→Send2 model→switch lúc streaming→Stop ô→Retry→Stop all model ẩn→Add4/Remove về2→Copy bảng/code/math→New→xoay màn hình; ghi chưa thực hiện nếu chưa có phiên test người dùng. Không tự gọi BTC thật, stage/commit/push hoặc triển khai FE010.
+- [x] Root chạy `npm test --prefix frontend`, `npm run typecheck --prefix frontend`, `npm run build --prefix frontend`, `npm run lint`, `npm run test:browser --prefix frontend`, Prettier chỉ file sửa và `git diff --check`.
+- [x] README/FE000 khi được phép: FE009 đã làm hay còn gì, thay fallback 390 bằng tabs thật; ghi thứ tự BE009/FE010 bàn giao. Không sửa ngược lịch sử FE004/FE005/FE008 hoặc tự tick reasoning/live.
+- [x] Cuối spec ghi files thực đổi, tests/exit codes/số cases thật, ảnh đã xem, khác Figma và giới hạn thiết bị/keyboard/zoom. Bundle warning hiện có báo đúng, không tự code split trong FE009. Mỗi checkbox chỉ tick khi đủ mọi yêu cầu con hoặc tách rõ phần đã/chưa.
+- [ ] Bàn giao người dùng checklist mobile: mở 390→Send 2 model→switch lúc streaming→Stop ô→Retry→Stop all model ẩn→Add 4/Remove về 2→Copy bảng/code/math→New→xoay màn hình; ghi chưa thực hiện nếu chưa có phiên test người dùng. Không tự gọi BTC thật, stage/commit/push hoặc triển khai FE010.
+
+## Kết quả Gemini ghi trước review (lịch sử)
+
+1. **Unit tests Vitest (Frontend):** 27 test files, 291 tests passed (100% pass):
+   - `useNarrowLayout.test.ts`: 5 tests pass.
+   - `MobileModelTabs.test.tsx`: 10 tests pass.
+   - `CompareTopBar.test.tsx`: 5 tests pass.
+   - `CompareGrid.test.tsx`: 14 tests pass.
+   - `AnswerCell.test.tsx`: 20 tests pass.
+   - `ComparePage.test.tsx`: 16 tests pass (bao gồm cả suite `Mobile Narrow Layout (FE009)`).
+2. **Typecheck & Linting:**
+   - `npm run typecheck --prefix frontend`: Exit code 0, 0 errors.
+   - `npm run lint`: Exit code 0, 0 errors, 0 warnings.
+   - `git diff --check`: Exit code 0, không có trailing whitespace hay conflict markers.
+3. **Build:**
+   - `npm run build --prefix frontend`: Exit code 0, Vite build thành công trong 573ms.
+4. **Browser Playwright E2E Tests:**
+   - `npm run test:browser --prefix frontend`: Cả 3 kịch bản `layout.mjs`, `interactions.mjs`, `mobile.mjs` đều PASS với exit code 0.
+   - Đã chụp và lưu trực tiếp các ảnh chụp kiểm chứng tại `frontend/artifacts/verification/`:
+     - `mobile-initial.png`, `mobile-streaming.png`, `mobile-success.png`, `mobile-picker.png`, `mobile-stopped.png`, `tablet-768.png`, `desktop-1440.png`.
+5. **Sai khác có chủ đích so với Figma mobile:**
+   - Frame Figma chỉ có 1 câu hỏi và không có nút New; trên thực tế ứng dụng có multi-turn nên header mobile có 2 hàng (hàng 1: logo/title + nút Share icon-only 44px; hàng 2: nút `Новое сравнение` căn phải target >= 44px) và mỗi turn có thanh tabs sticky riêng, đồng bộ chung `activeModelId`.
+
+## 2026-11-17 — Review Gemini và sửa lỗi Codex
+
+- Baseline Gemini:291 unit tests và browser suite đạt, nhưng một số assertions chưa chứng minh đúng hành vi. Review độc lập xác nhận mounted AnswerCell/shared active state/hidden semantics nhìn chung đúng; phát hiện các lỗi focus và giới hạn kiểm chứng dưới đây.
+- **Đã tái hiện fail rồi sửa:** remove model active trên mobile phải trả focus về selected tab cùng turn, không textarea; chọn model thứ4 khiến Add disabled phải focus tab cùng turn đã mở picker, không thanh đầu tiên. Khi resize unmount tab/header và focus về BODY, lưu focus context trước commit để chuyển tới control visible của active model hoặc textarea, không bỏ qua. Resize trong dialog vẫn để native modal giữ focus.
+- **Empty conversation:** thêm compact ModelHeader/Remove trong active empty panel để chọn2 model trước Send hoặc sau New; không cần gọi một request trả phí mới xóa được model thứ3. Đã có regression fail trước fix/pass sau; ARIA empty-panel conventions và message vẫn giữ.
+- **Touch/layout:** ModelHeader thêm optional compact, mobile Remove có hitarea44×44 và nền tròn32; không đổi desktop header. Composer390px được đo x12/width366 thay vì gutter28 do cộng padding lồng. Stop desktop khôi phục min-height32/padding ngang12; mobile mới dùng44/padding14. Tabs/Add hiện visual44 thay vì visual40 +hitarea44 của baseline: ghi nhận sai khác nhỏ, không tuyên bố khớp pixel tuyệt đối.
+- **ResizeObserver:** ModelPicker callback resize trước đây ghi kích thước ngay khi observe và có warning vòng lặp trong browser. Dời phản ứng ResizeObserver sang requestAnimationFrame, cancel frame khi cleanup; listener viewport/scroll vẫn được dọn. Browser cuối không còn báo warning này; không suppress global errors.
+- **Tests sửa và bổ sung:** test switch sau Send trước đây click tab empty đã detached và dùng toBeInTheDocument cho text ẩn; sửa requery tab sống và toBeVisible. Browser thêm focus remove/add ở turn2, resize focused controls, initial Remove/touch44, composer gutter12, reasoning mở qua A→B→A, stream/abort counters không đổi khi switch, overflow khi đã có đáp án và khi đổi từng model tại320/390/768/1279/1280/1440.
+- Thêm tình huống rotate/resize giữa4 streams, active tab done trong khi3 model ẩn còn chạy, Stop all phải đóng3 socket và active0; không lấy busy từ active tab. Test layout desktop chờ modelBar visible sau resize trước gửi phím, thay cho thao tác trên control cũ; không thêm sleep hoặc giảm assertion focus.
+- **Kết quả kiểm chứng mới:** `npm test --prefix frontend` **292/292 tests pass** (27 files); typecheck/build đạt; browser suite cuối gồm layout/interactions/mobile đạt; tất cả exit code0. `npm run lint` đạt exit code0. Không dùng bộ số291 phía trên làm kết quả hiện tại. JS build khoảng807.05kB (gzip246.15kB), CSS67.31kB (gzip17.14kB); còn cảnh báo chunk>500kB, không thay bundling ngoài phạm vi.
+- Đã xem trực tiếp ảnh mobile-success/mobile-picker/mobile-stopped/desktop-1440 trong artifact verification; bố cục không bị tràn/cắt nút ở các trạng thái đã kiểm tra. Chưa có bằng chứng tất cả ảnh error/math-long hoặc bàn phím thật iPhone/Android, zoom200%, sticky boundaries giữa nhiều turn và mọi matrix gated2/3/4 trên mobile. Các nhóm checklist liên quan được giữ/chuyển chưa tick nếu chưa đủ mọi yêu cầu con; không báo đầy đủ toàn bộ spec chỉ vì suite pass.
+- Kiểm tra cuối: Prettier trên toàn bộ file thay đổi (bao gồm file mới) và `git diff --check` đều exit code0 sau khi chuẩn hóa định dạng spec. Không có thay đổi mã nguồn sau lần unit/browser/typecheck/build đạt phía trên.
+- File bổ sung ngoài bảng triển khai ban đầu: ModelHeader.tsx/.module.css để có compact/touch target; các file focus/layout/tests của FE009 và README/FE000. Không sửa backend, env/key, dependency/lock, reasoning contract, renderer Markdown/toán hoặc request payload. Không gọi BTC live, không stage/commit/push. Chờ người dùng nghiệm thu FE009 trên thiết bị thật trước khi đóng mục bàn giao cuối.

@@ -47,7 +47,7 @@ export type ModelPickerProps = {
   selectedModelIds: readonly string[];
   onSelect: (modelId: string) => void;
   onClose: () => void;
-  anchorRef?: RefObject<HTMLButtonElement | null>;
+  anchorRef?: RefObject<HTMLElement | null>;
 };
 
 export function ModelPicker({
@@ -96,8 +96,17 @@ export function ModelPicker({
         Math.max(offsetY + 16, Math.min(top, offsetY + height - rect.height - 16)) + 'px';
     };
     position();
+    let positionFrame: number | undefined;
     const observer =
-      typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(position);
+      typeof ResizeObserver === 'undefined'
+        ? undefined
+        : new ResizeObserver(() => {
+            if (positionFrame !== undefined) cancelAnimationFrame(positionFrame);
+            positionFrame = requestAnimationFrame(() => {
+              positionFrame = undefined;
+              position();
+            });
+          });
     observer?.observe(dialog);
     if (anchorRef?.current) observer?.observe(anchorRef.current);
     window.addEventListener('resize', position);
@@ -105,6 +114,7 @@ export function ModelPicker({
     window.visualViewport?.addEventListener('resize', position);
     window.visualViewport?.addEventListener('scroll', position);
     return () => {
+      if (positionFrame !== undefined) cancelAnimationFrame(positionFrame);
       observer?.disconnect();
       window.removeEventListener('resize', position);
       window.removeEventListener('scroll', position, true);

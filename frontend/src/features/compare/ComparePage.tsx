@@ -1,5 +1,5 @@
 import { formatCostUsd } from './formatCost.js';
-import { useEffect, useReducer, useRef, useState, useCallback } from 'react';
+import { useEffect, useLayoutEffect, useReducer, useRef, useState, useCallback } from 'react';
 import type { CompareAction } from './types.js';
 import {
   comparisonReducer,
@@ -8,12 +8,28 @@ import {
 } from './comparisonState.js';
 import { fetchModels, ComparisonApiError, type ComparisonApiErrorCode } from './comparisonApi.js';
 import { streamAnswer } from './comparisonStream.js';
+import { useNarrowLayout } from './useNarrowLayout.js';
 import { CompareTopBar } from './components/CompareTopBar.js';
 import { CompareGrid } from './components/CompareGrid.js';
 import { AddModelColumn } from './components/AddModelColumn.js';
 import { PromptForm } from './components/PromptForm.js';
 import { ModelPicker } from './components/ModelPicker.js';
 import styles from './ComparePage.module.css';
+
+function selectedTabInTurn(turnId?: string): HTMLButtonElement | null {
+  const tabs = Array.from(
+    document.querySelectorAll<HTMLButtonElement>('[role="tab"][aria-selected="true"]'),
+  );
+  return (
+    tabs.find(
+      (tab) =>
+        tab.closest<HTMLElement>('[data-turn-id]')?.dataset.turnId === turnId &&
+        tab.offsetParent !== null,
+    ) ??
+    tabs.filter((tab) => tab.offsetParent !== null).at(-1) ??
+    null
+  );
+}
 
 function mapErrorCodeToMessage(code: ComparisonApiErrorCode | string): string {
   switch (code) {
@@ -39,9 +55,21 @@ function mapErrorCodeToMessage(code: ComparisonApiErrorCode | string): string {
 }
 
 export function ComparePage() {
+  const isNarrow = useNarrowLayout();
   const [state, dispatch] = useReducer(comparisonReducer, undefined, createInitialComparisonState);
   const [catalogStatus, setCatalogStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [catalogReloadCount, setCatalogReloadCount] = useState(0);
+
+  const [activeModelId, setActiveModelId] = useState<string | null>(null);
+  const resolvedActiveModelId = state.models.some((m) => m.id === activeModelId)
+    ? activeModelId
+    : (state.models[0]?.id ?? null);
+
+  useEffect(() => {
+    if (activeModelId !== resolvedActiveModelId) {
+      setActiveModelId(resolvedActiveModelId);
+    }
+  }, [activeModelId, resolvedActiveModelId]);
 
   const [promptValue, setPromptValue] = useState('');
   const [statusMessage, setStatusMessage] = useState('');
@@ -50,11 +78,54 @@ export function ComparePage() {
 
   const promptInputRef = useRef<HTMLTextAreaElement>(null);
   const addModelBtnRef = useRef<HTMLButtonElement>(null);
+  const pickerAnchorRef = useRef<HTMLElement | null>(null);
   const pickerWasOpen = useRef(false);
+  const lastFocusedRef = useRef<{ element: HTMLElement; turnId?: string } | null>(null);
+  const pendingTabFocusRef = useRef<{ turnId?: string } | null>(null);
+
+  useLayoutEffect(() => {
+    if (pendingTabFocusRef.current && isNarrow) {
+      selectedTabInTurn(pendingTabFocusRef.current.turnId)?.focus({ preventScroll: true });
+      pendingTabFocusRef.current = null;
+    }
+  }, [isNarrow, state.models, resolvedActiveModelId]);
 
   const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
   const inFlightByCellRef = useRef<Map<string, string>>(new Map());
   const isMountedRef = useRef(true);
+
+  const prevIsNarrowRef = useRef(isNarrow);
+  useLayoutEffect(() => {
+    const prevNarrow = prevIsNarrowRef.current;
+    prevIsNarrowRef.current = isNarrow;
+    if (prevNarrow === isNarrow) return;
+
+    const previous = lastFocusedRef.current;
+    const activeEl = document.activeElement as HTMLElement | null;
+    const lostFocus = activeEl === document.body && previous && !previous.element.isConnected;
+    if (lostFocus || (activeEl && activeEl !== document.body && activeEl.offsetParent === null)) {
+      if (isPickerOpen) return; // Native modal keeps keyboard focus until it closes.
+      if (isNarrow) {
+        const selectedTab = selectedTabInTurn(previous?.turnId);
+        if (selectedTab && selectedTab.offsetParent !== null) {
+          selectedTab.focus();
+        } else {
+          promptInputRef.current?.focus();
+        }
+      } else {
+        const header = Array.from(document.querySelectorAll<HTMLElement>('[data-model-id]')).find(
+          (node) =>
+            node.dataset.modelId === resolvedActiveModelId && node.closest('[class*="modelBar"]'),
+        );
+        const removeBtn = header?.querySelector<HTMLButtonElement>('button');
+        if (removeBtn && !removeBtn.disabled && removeBtn.offsetParent !== null) {
+          removeBtn.focus();
+        } else {
+          promptInputRef.current?.focus();
+        }
+      }
+    }
+  }, [isNarrow, isPickerOpen, resolvedActiveModelId]);
 
   useEffect(() => {
     const controllers = abortControllersRef.current;
@@ -94,9 +165,24 @@ export function ComparePage() {
 
   useEffect(() => {
     if (pickerWasOpen.current && !isPickerOpen) {
-      const addButton = addModelBtnRef.current;
-      if (addButton && !addButton.disabled) addButton.focus();
-      else promptInputRef.current?.focus();
+      const trigger = pickerAnchorRef.current;
+      if (
+        trigger &&
+        document.body.contains(trigger) &&
+        !(trigger as HTMLButtonElement).disabled &&
+        trigger.offsetParent !== null
+      ) {
+        trigger.focus();
+      } else {
+        const visibleTab = selectedTabInTurn(
+          trigger?.closest<HTMLElement>('[data-turn-id]')?.dataset.turnId,
+        );
+        if (visibleTab && visibleTab.offsetParent !== null) {
+          visibleTab.focus();
+        } else {
+          promptInputRef.current?.focus();
+        }
+      }
     }
     pickerWasOpen.current = isPickerOpen;
   }, [isPickerOpen]);
@@ -277,12 +363,18 @@ export function ComparePage() {
         break;
       }
       case 'add-model': {
+        pickerAnchorRef.current = addModelBtnRef.current;
         setIsPickerOpen(true);
         break;
       }
       case 'remove-model': {
         if (state.models.length <= 2) {
           return;
+        }
+        if (isNarrow) {
+          pendingTabFocusRef.current = {
+            turnId: document.activeElement?.closest<HTMLElement>('[data-turn-id]')?.dataset.turnId,
+          };
         }
 
         for (const [cellKey, reqId] of Array.from(inFlightByCellRef.current.entries())) {
@@ -294,8 +386,18 @@ export function ComparePage() {
           }
         }
 
+        if (action.modelId === resolvedActiveModelId) {
+          const currentIndex = state.models.findIndex((m) => m.id === action.modelId);
+          const remainingModels = state.models.filter((m) => m.id !== action.modelId);
+          if (remainingModels.length > 0) {
+            const nextIndex =
+              currentIndex < remainingModels.length ? currentIndex : remainingModels.length - 1;
+            setActiveModelId(remainingModels[nextIndex].id);
+          }
+        }
+
         dispatch({ type: 'remove-model', modelId: action.modelId });
-        promptInputRef.current?.focus();
+        if (!isNarrow) promptInputRef.current?.focus();
         break;
       }
       case 'retry': {
@@ -345,8 +447,26 @@ export function ComparePage() {
   const handleClosePicker = useCallback(() => setIsPickerOpen(false), []);
 
   const handleSelectModel = (modelId: string) => {
+    if (
+      !state.catalog.some((m) => m.id === modelId) ||
+      state.models.some((m) => m.id === modelId) ||
+      state.models.length >= 4
+    ) {
+      return;
+    }
+    setActiveModelId(modelId);
     dispatch({ type: 'select-model', modelId });
     setIsPickerOpen(false);
+  };
+
+  const handleOpenPickerFromDesktop = () => {
+    pickerAnchorRef.current = addModelBtnRef.current;
+    setIsPickerOpen(true);
+  };
+
+  const handleOpenPickerFromMobile = (trigger: HTMLButtonElement) => {
+    pickerAnchorRef.current = trigger;
+    setIsPickerOpen(true);
   };
 
   const isPromptDisabled = catalogStatus !== 'ready' || state.models.length < 2;
@@ -357,8 +477,19 @@ export function ComparePage() {
     state.models.length >= state.catalog.length;
 
   return (
-    <div data-testid="compare-page" className={styles.page}>
+    <div
+      data-testid="compare-page"
+      className={styles.page}
+      onFocusCapture={(event) => {
+        const element = event.target as HTMLElement;
+        lastFocusedRef.current = {
+          element,
+          turnId: element.closest<HTMLElement>('[data-turn-id]')?.dataset.turnId,
+        };
+      }}
+    >
       <CompareTopBar
+        isNarrow={isNarrow}
         onShare={() => handleAction({ type: 'share' })}
         onNewComparison={() => handleAction({ type: 'new-comparison' })}
       />
@@ -393,24 +524,46 @@ export function ComparePage() {
               Для сравнения нужны минимум две модели.
             </div>
             <div className={styles.bodyGrid}>
-              <CompareGrid models={state.models} turns={state.turns} onAction={handleAction} />
-              <AddModelColumn
-                ref={addModelBtnRef}
-                onAdd={() => handleAction({ type: 'add-model' })}
-                disabled={true}
+              <CompareGrid
+                models={state.models}
+                turns={state.turns}
+                onAction={handleAction}
+                isNarrow={isNarrow}
+                activeModelId={resolvedActiveModelId}
+                onSelectModel={setActiveModelId}
+                onAddModel={handleOpenPickerFromMobile}
+                addDisabled={true}
               />
+              {!isNarrow && (
+                <AddModelColumn
+                  ref={addModelBtnRef}
+                  onAdd={handleOpenPickerFromDesktop}
+                  disabled={true}
+                />
+              )}
             </div>
           </>
         )}
 
         {catalogStatus === 'ready' && state.catalog.length >= 2 && (
           <div className={styles.bodyGrid}>
-            <CompareGrid models={state.models} turns={state.turns} onAction={handleAction} />
-            <AddModelColumn
-              ref={addModelBtnRef}
-              onAdd={() => handleAction({ type: 'add-model' })}
-              disabled={isAddDisabled}
+            <CompareGrid
+              models={state.models}
+              turns={state.turns}
+              onAction={handleAction}
+              isNarrow={isNarrow}
+              activeModelId={resolvedActiveModelId}
+              onSelectModel={setActiveModelId}
+              onAddModel={handleOpenPickerFromMobile}
+              addDisabled={isAddDisabled}
             />
+            {!isNarrow && (
+              <AddModelColumn
+                ref={addModelBtnRef}
+                onAdd={handleOpenPickerFromDesktop}
+                disabled={isAddDisabled}
+              />
+            )}
           </div>
         )}
 
@@ -444,7 +597,7 @@ export function ComparePage() {
           selectedModelIds={state.models.map((m) => m.id)}
           onSelect={handleSelectModel}
           onClose={handleClosePicker}
-          anchorRef={addModelBtnRef}
+          anchorRef={pickerAnchorRef}
         />
       )}
     </div>

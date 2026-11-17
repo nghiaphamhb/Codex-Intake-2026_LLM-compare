@@ -45,9 +45,11 @@ await withBrowser(async ({ page, reset }) => {
   await assertLayout(page, 3);
 
   await page.setViewportSize({ width: 390, height: 844 });
-  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), 1280);
+  const scrollWidth390 = await page.evaluate(() => document.documentElement.scrollWidth);
+  assert.ok(scrollWidth390 <= 391, `expected scrollWidth <= 391, got ${scrollWidth390}`);
 
   await page.setViewportSize({ width: 1440, height: 1490 });
+  await page.locator('[class*="modelBar"]').waitFor({ state: 'visible' });
   await page.getByRole('button', { name: 'Скопировать ссылку', exact: true }).focus();
   await page.keyboard.press('Tab');
   await assertFocused(page, page.getByRole('button', { name: 'Новое сравнение', exact: true }));

@@ -5,9 +5,7 @@ import { CompareTopBar } from './CompareTopBar';
 
 describe('CompareTopBar', () => {
   it('renders logo and brand title', () => {
-    const { container } = render(
-      <CompareTopBar onShare={vi.fn()} onNewComparison={vi.fn()} />
-    );
+    const { container } = render(<CompareTopBar onShare={vi.fn()} onNewComparison={vi.fn()} />);
 
     expect(screen.getByText('LLM Compare')).toBeInTheDocument();
     const logoImg = container.querySelector('img[src*="logo.svg"]');
@@ -17,12 +15,8 @@ describe('CompareTopBar', () => {
   it('renders share and new comparison buttons with Russian labels', () => {
     render(<CompareTopBar onShare={vi.fn()} onNewComparison={vi.fn()} />);
 
-    expect(
-      screen.getByRole('button', { name: /скопировать ссылку/i })
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: /новое сравнение/i })
-    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /скопировать ссылку/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /новое сравнение/i })).toBeInTheDocument();
   });
 
   it('calls onShare when share button is clicked', async () => {
@@ -30,9 +24,7 @@ describe('CompareTopBar', () => {
     const onShare = vi.fn();
     render(<CompareTopBar onShare={onShare} onNewComparison={vi.fn()} />);
 
-    await user.click(
-      screen.getByRole('button', { name: /скопировать ссылку/i })
-    );
+    await user.click(screen.getByRole('button', { name: /скопировать ссылку/i }));
     expect(onShare).toHaveBeenCalledTimes(1);
   });
 
@@ -44,5 +36,22 @@ describe('CompareTopBar', () => {
     await user.click(screen.getByRole('button', { name: /новое сравнение/i }));
     expect(onNewComparison).toHaveBeenCalledTimes(1);
   });
-});
 
+  it('renders mobile two-row layout with accessible buttons when isNarrow is true', async () => {
+    const user = userEvent.setup();
+    const onShare = vi.fn();
+    const onNewComparison = vi.fn();
+
+    render(<CompareTopBar isNarrow={true} onShare={onShare} onNewComparison={onNewComparison} />);
+
+    const shareBtn = screen.getByRole('button', { name: /скопировать ссылку/i });
+    expect(shareBtn).toBeInTheDocument();
+    await user.click(shareBtn);
+    expect(onShare).toHaveBeenCalledTimes(1);
+
+    const newBtn = screen.getByRole('button', { name: /новое сравнение/i });
+    expect(newBtn).toBeInTheDocument();
+    await user.click(newBtn);
+    expect(onNewComparison).toHaveBeenCalledTimes(1);
+  });
+});
